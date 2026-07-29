@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05070c">
+<title>YUSUKE — OFFICIAL</title>
+<style>
+/* ===========================================================
+   固定要素なし / canvasなし / 無限アニメーションなし
+   filter・backdrop-filter・大きな影なし
+   =========================================================== */
+:root{
+  --bg:#05070c;
+  --ink:#e9ecf4;
+  --dim:#7c869f;
+  --line:rgba(255,255,255,.09);
+  --fire:#ff7a45;
+  --gold:#ffc65a;
+  --cool:#8ab4ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:#05070c;color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  line-height:1.9;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+a{color:inherit;text-decoration:none}
+
+/* ===== ページ ===== */
+.page{display:none}
+.page.active{display:block}
+
+/* ===== 戻る ===== */
+.topbar{display:none;align-items:center;gap:14px;padding:16px;border-bottom:1px solid var(--line)}
+body.sub .topbar{display:flex}
+.bk{font-size:12.5px;letter-spacing:.14em;color:#9aa4bd;border:1px solid var(--line);border-radius:99px;padding:8px 16px}
+.tt{font-size:12.5px;letter-spacing:.3em;color:#5f6980}
+.backfoot{text-align:center;padding:10px 20px 30px}
+.backfoot a{font-size:12.5px;letter-spacing:.2em;color:#7c869f;border:1px solid var(--line);border-radius:99px;padding:10px 22px;display:inline-block}
+
+/* ===== 共通 ===== */
+.sec{max-width:900px;margin:0 auto;padding:70px 22px}
+.sec.tight{padding:44px 22px}
+.eyebrow{font-size:10.5px;letter-spacing:.42em;color:#5d6a86;text-align:center;margin-bottom:16px}
+.h2{text-align:center;font-size:clamp(23px,5.6vw,38px);font-weight:900;letter-spacing:.03em;line-height:1.5;margin-bottom:42px}
+.rule{height:1px;background:var(--line);max-width:900px;margin:0 auto}
+.rv{opacity:0;transform:translateY(20px);transition:opacity .6s ease-out,transform .6s ease-out}
+.rv.on{opacity:1;transform:none}
+.quiet{color:#7c869f;font-size:13.5px;letter-spacing:.06em}
+.lead{font-size:clamp(14.5px,3.7vw,17.5px);color:#b9c1d4;margin-bottom:26px}
+.big{font-size:clamp(20px,5.2vw,32px);font-weight:800;color:#fff;line-height:1.6;margin:44px 0;text-align:center}
+.big em{font-style:normal;color:var(--gold)}
+.note{margin-top:28px;padding:19px 21px;border-left:2px solid var(--fire);font-size:13.8px;color:#a4adc2;background:rgba(255,122,69,.06);border-radius:0 8px 8px 0}
+.note b{color:#dfe4f0}
+.note.cool{border-left-color:var(--cool);background:rgba(138,180,255,.06)}
+.note.gold{border-left-color:var(--gold);background:rgba(255,198,90,.06)}
+
+/* ===== 空欄 ===== */
+.empty{border:1px dashed rgba(255,255,255,.15);border-radius:14px;padding:32px 24px;text-align:center;margin:14px 0}
+.empty .ttl{font-size:13px;letter-spacing:.26em;color:#5f6980;margin-bottom:12px}
+.empty .msg{font-size:14px;color:#79839a;line-height:2}
+.empty .msg b{color:#c3ccdf}
+
+/* ===== HERO ===== */
+.hero{
+  min-height:92vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:80px 20px 70px;
+  background:radial-gradient(ellipse 120% 55% at 50% 105%,rgba(255,140,60,.20),rgba(255,110,55,.05) 45%,rgba(5,7,12,0) 72%);
+}
+.hname{font-size:11px;letter-spacing:.46em;color:#78829c;margin-bottom:26px}
+.htitle{
+  font-size:clamp(60px,16vw,168px);font-weight:900;line-height:.94;letter-spacing:.04em;
+  background:linear-gradient(180deg,#fff 0%,#ffe6b0 46%,#ff9a3c 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hsub{margin-top:24px;font-size:clamp(12px,3.2vw,15.5px);color:#96a0bd;letter-spacing:.13em}
+.cd{margin-top:52px}
+.cd .lab{font-size:10.5px;letter-spacing:.34em;color:#ff7d5c;margin-bottom:8px}
+.cd .num{font-size:clamp(54px,13vw,116px);font-weight:900;line-height:1;color:#fff}
+.cd .num span{font-size:.27em;font-weight:700;margin-left:9px;color:#ff9d84;letter-spacing:.1em}
+.cd .cap{margin-top:10px;font-size:12px;color:#8b93ad;letter-spacing:.14em}
+
+/* ===== 道 ===== */
+.climb{display:flex;flex-direction:column-reverse}
+.stepr{display:flex;align-items:center;gap:18px;padding:22px 0;border-bottom:1px solid var(--line)}
+.stepr:first-child{border-bottom:none}
+.dot{flex:0 0 auto;width:12px;height:12px;border-radius:50%;background:#39445e}
+.stepr .when{font-size:10.5px;letter-spacing:.24em;color:#6b7691;margin-bottom:5px}
+.stepr .what{font-size:clamp(18px,4.3vw,27px);font-weight:800;color:#dfe5f2;line-height:1.4}
+.stepr .why{font-size:12.5px;color:#77809b;margin-top:5px}
+.stepr.hot .dot{background:var(--fire);width:16px;height:16px}
+.stepr.hot .what{font-size:clamp(23px,6.2vw,40px);font-weight:900;color:#fff}
+.stepr.hot .when{color:#ff9a70}
+.stepr.gold .dot{background:var(--gold)}
+.stepr.gold .when{color:#c9a45e}
+.stepr.top .dot{background:#fff}
+.stepr.top .what{color:#ffd98a;font-size:clamp(25px,7vw,48px);font-weight:900}
+.stepr.top .when{color:#d9c48d}
+.tagm{display:inline-block;font-size:9.5px;font-weight:900;letter-spacing:.24em;background:var(--fire);color:#0b0d12;border-radius:3px;padding:3px 8px;margin-right:10px;vertical-align:middle}
+
+/* ===== 価値観 ===== */
+.umb{text-align:center;margin-bottom:28px;font-size:12px;color:#6d7791;letter-spacing:.2em}
+.umb b{display:block;font-size:clamp(18px,4.4vw,25px);color:#dfe4f0;font-weight:800;letter-spacing:.04em;margin-top:6px}
+.vrow{display:flex;align-items:baseline;gap:18px;padding:14px 4px;border-bottom:1px solid var(--line)}
+.vrow .r{flex:0 0 34px;font-size:11.5px;color:#4f5a75;letter-spacing:.1em;font-weight:700}
+.vrow .v{font-size:16px;color:#aab3c8}
+.vrow.top1 .v,.vrow.top2 .v,.vrow.top3 .v{font-size:clamp(20px,4.6vw,29px);font-weight:900;color:#fff}
+.vrow.top1 .r,.vrow.top2 .r,.vrow.top3 .r{color:var(--gold)}
+.vrow.spark{background:rgba(255,122,69,.10);border-radius:8px}
+.vrow.spark .v{font-size:clamp(17.5px,4.3vw,25px);font-weight:900;color:#ff9a5c}
+.vrow.spark .r{color:var(--fire)}
+
+/* ===== 二本柱 ===== */
+.anchor{text-align:center}
+.anchor .a1{font-size:clamp(19px,4.8vw,28px);font-weight:900;color:#fff;line-height:1.7}
+.anchor .a1 em{font-style:normal;color:var(--gold)}
+.anchor .a2{margin-top:18px;font-size:13px;color:#7c869f;letter-spacing:.1em}
+
+/* ===== ページ入口 ===== */
+.menu{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+@media(max-width:560px){.menu{grid-template-columns:1fr}}
+.mcard{display:block;background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:14px;padding:21px 22px}
+.mcard .mk{font-size:10px;letter-spacing:.3em;color:#5d6a86;margin-bottom:8px}
+.mcard .mt{font-size:19px;font-weight:800;color:#e7ecf7;letter-spacing:.05em}
+.mcard .md{font-size:12.5px;color:#78829c;margin-top:6px;line-height:1.75}
+.mcard .st{display:inline-block;margin-top:11px;font-size:10px;letter-spacing:.18em;padding:3px 9px;border-radius:99px;border:1px solid var(--line);color:#6b7691}
+.mcard .st.live{color:#ffb98a;border-color:rgba(255,122,69,.35)}
+
+/* ===== 時計 ===== */
+.clocks{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:680px){.clocks{grid-template-columns:1fr}}
+.clock{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:14px;padding:22px 18px;text-align:center}
+.clock .race{font-size:11.5px;letter-spacing:.24em;color:#6b7691;margin-bottom:10px}
+.clock .cond{font-size:15.5px;font-weight:800;color:#dfe5f2;line-height:1.6}
+.bodyline{margin-top:24px;text-align:center;font-size:13.5px;color:#8b93ad}
+.bodyline b{color:var(--gold);font-size:16.5px}
+
+/* ===== 燃料 ===== */
+.money{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:22px;text-align:center;margin-bottom:40px}
+@media(max-width:640px){.money{grid-template-columns:1fr;gap:10px}}
+.mnum{font-size:clamp(38px,10vw,74px);font-weight:900;line-height:1}
+.mnum small{font-size:.38em}
+.mfrom{color:#5f6880}
+.mto{color:#ffcf6a}
+.mlab{font-size:10.5px;letter-spacing:.24em;color:#6b7691;margin-top:10px}
+.marrow{font-size:28px;color:#4a5470}
+.freeline{text-align:center;font-size:clamp(14.5px,3.6vw,20px);font-weight:700;color:#ffd88a;line-height:1.95}
+.freeline small{display:block;font-size:12.5px;color:#8b93ad;font-weight:400;margin-top:12px}
+
+/* ===== 未来の自分 ===== */
+.iam{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+@media(max-width:760px){.iam{grid-template-columns:1fr}}
+.iam .c{background:rgba(138,180,255,.055);border:1px solid rgba(138,180,255,.15);border-radius:13px;padding:18px 20px;font-size:14px;color:#c3ccdf;line-height:1.85}
+.iam .c b{color:#fff;font-weight:800}
+.declare{margin-top:38px;text-align:center;font-size:clamp(20px,5.4vw,36px);font-weight:900;line-height:1.65}
+.declare span{color:#a7c2ff}
+
+/* ===== 哲学 ===== */
+.ph{border-top:1px solid var(--line);padding:20px 2px}
+.ph:last-of-type{border-bottom:1px solid var(--line)}
+.ph .pt{font-size:clamp(17px,4.2vw,23px);font-weight:900;color:#fff}
+.ph .pb{font-size:13.5px;color:#96a0b8;margin-top:8px;line-height:1.95}
+.gate{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:14px;padding:24px 22px;margin-bottom:12px}
+.gate .gk{font-size:10px;letter-spacing:.3em;color:#5d6a86;margin-bottom:10px}
+.gate .gq{font-size:clamp(15.5px,3.9vw,20px);font-weight:800;color:#fff;line-height:1.7}
+.gate.two .gq{color:#ffb98a}
+
+/* ===== 軌跡 ===== */
+.track{border-left:2px solid var(--line);margin-left:7px;padding-left:24px}
+.tk{position:relative;padding:17px 0}
+.tk::before{content:'';position:absolute;left:-31px;top:25px;width:10px;height:10px;border-radius:50%;background:#39445e;border:2px solid #05070c}
+.tk.done::before{background:var(--gold)}
+.tk .d{font-size:10.5px;letter-spacing:.22em;color:#6b7691}
+.tk .x{font-size:15.5px;color:#c3ccdf;margin-top:4px}
+.tk.blank{opacity:.45}
+.tk.blank .x{color:#6b7691}
+
+/* ===== プロジェクト ===== */
+.prj{border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:11px;background:rgba(255,255,255,.03)}
+.prj .pk{font-size:10px;letter-spacing:.22em;color:#5d6a86;margin-bottom:8px}
+.prj .pn{font-size:19px;font-weight:800;color:#e7ecf7}
+.prj .pd{font-size:13px;color:#79839a;margin-top:7px;line-height:1.85}
+.prj .pstat{display:inline-block;margin-top:12px;font-size:10px;letter-spacing:.18em;padding:3px 9px;border-radius:99px;border:1px solid var(--line);color:#6b7691}
+.prj .pstat.live{color:#ffb98a;border-color:rgba(255,122,69,.35)}
+
+/* ===== 締め ===== */
+.end{padding:80px 22px 60px;text-align:center}
+.endh{font-size:clamp(25px,7vw,54px);font-weight:900;line-height:1.45}
+.endh em{font-style:normal;color:var(--gold)}
+.endp{margin-top:26px;font-size:13.5px;color:#7d87a3;line-height:2.2}
+.loopmini{margin-top:40px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.loopmini span{font-size:11px;color:#93a0c0;border:1px solid var(--line);border-radius:99px;padding:8px 15px}
+.loopmini span.arw{border:none;color:#4a5470;padding:8px 1px}
+footer{text-align:center;padding:34px 20px calc(50px + env(safe-area-inset-bottom));font-size:10px;letter-spacing:.3em;color:#3d465c}
+
+@media(prefers-reduced-motion:reduce){.rv{transition:none;opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="bk" href="#home">◀　ホーム</a>
+  <span class="tt" id="tbTitle"></span>
+</div>
+
+<!-- ==================== HOME ==================== -->
+<div class="page active" id="home">
+
+  <header class="hero">
+    <div class="hname">Y U S U K E 　／　 S T A I R  C L I M B I N G</div>
+    <h1 class="htitle">世界一へ</h1>
+    <div class="hsub">自 由 を 掴 み 、 自 己 実 現 に 全 振 り し て 、 充 実 し た 人 生 を 生 き る</div>
+    <div class="cd">
+      <div class="lab">全 日 本 選 手 権 ま で</div>
+      <div class="num" id="days">—<span>日</span></div>
+      <div class="cap">11 / 15　東京都庁　—　優勝以外にない</div>
+    </div>
+  </header>
+
+  <div class="rule"></div>
+
+  <section class="sec">
+    <div class="eyebrow rv">全 体 像</div>
+    <h2 class="h2 rv">下から、一段ずつ。</h2>
+    <div class="climb">
+      <div class="stepr rv"><div class="dot"></div><div>
+        <div class="when">い ま</div><div class="what">怪我。ここが底。</div>
+        <div class="why">底にいるということは、ここから先は全部上りだということ</div></div></div>
+      <div class="stepr rv"><div class="dot"></div><div>
+        <div class="when">復 帰 ま で</div><div class="what">完全に治して、仕上げる</div>
+        <div class="why">中途半端に走って長引かせない。空いた時間は全部システム構築へ</div></div></div>
+      <div class="stepr hot rv"><div class="dot"></div><div>
+        <div class="when">1 1 / 1 5 　 東 京 都 庁</div><div class="what"><span class="tagm">MUST</span>全日本 優勝</div>
+        <div class="why">＋ SJC 年間チャンピオン</div></div></div>
+      <div class="stepr rv"><div class="dot"></div><div>
+        <div class="when">1 1 月 末 　 上 海</div><div class="what">上海タワー トップ10</div>
+        <div class="why">ロングがどこまで伸びたかを、世界の中で測る</div></div></div>
+      <div class="stepr gold rv"><div class="dot"></div><div>
+        <div class="when">年 内</div><div class="what">月 50万 → 100万</div>
+        <div class="why">来年の遠征費から逆算した、動かせない期日</div></div></div>
+      <div class="stepr top rv"><div class="dot"></div><div>
+        <div class="when">そ の 先</div><div class="what">ステアクライミング 世界一</div>
+        <div class="why">この一段のために、下の全部がある</div></div></div>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="sec">
+    <div class="eyebrow rv">大 事 な こ と</div>
+    <div class="anchor rv">
+      <div class="a1"><em>死んでも後悔しないように。</em><br>求めているのは、ただの自己実現じゃない。<em>人生挽回だ。</em></div>
+      <div class="a2">棒 に 振 っ た 1 0 年 を 、 一 気 に 取 り 返 し に い く</div>
+    </div>
+
+    <div style="height:48px"></div>
+
+    <div class="umb rv">す べ て を 包 む 傘<b>充実 — 充実した人生を生きる</b></div>
+    <div>
+      <div class="vrow top1 rv"><div class="r">1</div><div class="v">自由（独立）</div></div>
+      <div class="vrow top2 rv"><div class="r">2</div><div class="v">自己実現</div></div>
+      <div class="vrow top3 rv"><div class="r">3</div><div class="v">成長／自己研鑽</div></div>
+      <div class="vrow rv"><div class="r">4</div><div class="v">挑戦／情熱／達成</div></div>
+      <div class="vrow spark rv"><div class="r">5</div><div class="v">ワクワク／高揚感／冒険</div></div>
+    </div>
+    <div class="rv" style="text-align:center;margin-top:18px">
+      <a class="quiet" href="#self">6位以下と、未来の自分を見る　→</a>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="sec tight">
+    <div class="eyebrow rv">今 日 の 一 つ</div>
+    <div class="empty rv">
+      <div class="ttl">こ こ に 、 今 日 や る 一 つ が 出 る</div>
+      <div class="msg">
+        まだ空。<b>空いているということは、今日まだ何も決めていない</b>ということ。<br>
+        ノートアプリが回れば、抽出された「今日の一つ」がここに来る。
+      </div>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="sec">
+    <div class="eyebrow rv">ペ ー ジ</div>
+    <h2 class="h2 rv">必要なものは、全部ここにある。</h2>
+    <div class="menu">
+      <a class="mcard rv" href="#origin">
+        <div class="mk">O R I G I N</div><div class="mt">原 点</div>
+        <div class="md">なぜここに立っているのか。倒れた日、押したボタン、姉、1400万</div>
+        <div class="st">確 定</div></a>
+      <a class="mcard rv" href="#athlete">
+        <div class="mk">A T H L E T E</div><div class="mt">アスリート</div>
+        <div class="md">目標・基準・練習の組み方・ToDo。ここを見れば今日やることが全部分かる状態にする</div>
+        <div class="st live">構 築 中</div></a>
+      <a class="mcard rv" href="#money">
+        <div class="mk">F R E E D O M</div><div class="mt">収 入 と 自 由</div>
+        <div class="md">25万 → 25万 → 50〜100万。時間を買い戻すための道筋</div>
+        <div class="st live">構 築 中</div></a>
+      <a class="mcard rv" href="#self">
+        <div class="mk">S E L F</div><div class="mt">価 値 観 と 自 己 像</div>
+        <div class="md">大事な価値観12個と、未来の自分。迷ったらここで決める</div>
+        <div class="st">確 定</div></a>
+      <a class="mcard rv" href="#philosophy">
+        <div class="mk">P H I L O S O P H Y</div><div class="mt">哲 学 ス ト ッ ク</div>
+        <div class="md">二度と忘れないための言葉。判断基準はここに集める</div>
+        <div class="st live">積 み 上 げ 中</div></a>
+      <a class="mcard rv" href="#projects">
+        <div class="mk">P R O J E C T S</div><div class="mt">プ ロ ジ ェ ク ト</div>
+        <div class="md">立ったものを一つずつページにして管理する。バリューランタン、ACT、システム構築</div>
+        <div class="st live">構 築 中</div></a>
+      <a class="mcard rv" href="#track">
+        <div class="mk">T R A C K</div><div class="mt">軌 跡</div>
+        <div class="md">積み上がったものが並ぶ場所。空白が続けば、それが答えだ</div>
+        <div class="st live">記 録 中</div></a>
+      <a class="mcard rv" href="#system">
+        <div class="mk">S Y S T E M</div><div class="mt">こ の ペ ー ジ の 仕 組 み</div>
+        <div class="md">ノートアプリで回して、ここを改善する。そのループの定義</div>
+        <div class="st">確 定</div></a>
+    </div>
+  </section>
+
+  <section class="end">
+    <div class="endh">他の人間が365日かけて届かない場所に、<br><em>1日で行く。</em></div>
+    <div class="endp">そのために、課題を潰し続けるシステムを作る。<br>完璧を待たない。今の自分のベストを、今日つくる。</div>
+    <div class="loopmini rv">
+      <span>想像する</span><span class="arw">→</span>
+      <span>小さくトライ</span><span class="arw">→</span>
+      <span>天井が上がる</span><span class="arw">→</span>
+      <span>想像し直す</span><span class="arw">↻</span>
+    </div>
+  </section>
+
+  <footer>D I E　W I T H　N O　R E G R E T</footer>
+</div>
+
+<!-- ==================== 原点 ==================== -->
+<div class="page" id="origin" data-title="原 点">
+  <section class="sec">
+    <div class="eyebrow rv">原 点</div>
+    <h2 class="h2 rv">なぜ、ここに立っているのか。</h2>
+    <p class="lead rv">36歳のとき、自律神経失調症で倒れた。ああ、自分は死ぬんだ、と思った。それから一年、動悸とめまいが続いて、まともに運動できない体になった。そのとき決めた。死んでも後悔しないように、本当にやりたいことをやる。</p>
+    <p class="lead rv">一番の後悔は、ステアクライミングを始めていなかったことだった。高校の野球部、冬の階段ダッシュ。あれがいつも一番だった記憶が、ずっと残っていた。見つけていたのに、始めなかった。今は始める時期じゃない、と理由をつけて先送りした。</p>
+    <p class="lead rv">37歳。SJC名古屋大会のエントリーが始まっていた。ここで押さなかったら、今までの人生と何も変わらない。途中で登れなくなったら歩いてでもいい、と腹をくくって、ボタンを押した。</p>
+    <p class="big rv"><em>死んでも後悔しないように。</em><br>これが原点だ。絶対に忘れない。</p>
+    <p class="lead rv">なぜ日本一ではなく、世界一なのか。劣等感の払拭だ。姉はプロスノーボーダーとして世界を回っていた。あの頃の俺は劣等感の塊だった。姉は日本一にはなったが、ツアー総合優勝には届いていない。だから、俺が世界一を取ることに意味がある。</p>
+    <p class="lead rv">姉への劣等感は、ほぼ消えた。あの燃料は役目を果たした。今そこに入っているのは、まだ見ぬライバルだ。ステアクライミングはまだ若い競技で、他競技のトップがひょろっと入ってきて、積み上げた日本一をあっさり抜いていく世界だ。だから本当の相手は、いまの国内選手じゃない。<span class="quiet">国内を圧倒しなければならない理由は、そこにある。</span></p>
+    <p class="big rv">求めているのは、ただの自己実現じゃない。<br><em>人生挽回だ。</em></p>
+    <p class="lead rv">20代でネットビジネスに挑戦して、1400万の借金を作って自己破産した。30代前半は人とほとんど関わらず、人生を棒に振った。こんなはずじゃなかった。だから今、棒に振った10年分を一気に取り返しにいく。一つの自己実現では足りない。それでは挽回にならないからだ。</p>
+  </section>
+  <div class="backfoot"><a href="#home">◀　ホ ー ム へ</a></div>
+  <footer>D I E　W I T H　N O　R E G R E T</footer>
+</div>
+
+<!-- ==================== アスリート ==================== -->
+<div class="page" id="athlete" data-title="ア ス リ ー ト">
+  <section class="sec">
+    <div class="eyebrow rv">A T H L E T E</div>
+    <h2 class="h2 rv">ここを見れば、<br>今日やることが全部分かる。</h2>
+    <div class="eyebrow rv" style="text-align:left">目 標</div>
+    <div class="climb rv">
+      <div class="stepr hot"><div class="dot"></div><div>
+        <div class="when">1 1 / 1 5 　 東 京 都 庁</div><div class="what"><span class="tagm">MUST</span>全日本 優勝</div>
+        <div class="why">＋ SJC 年間チャンピオン</div></div></div>
+      <div class="stepr"><div class="dot"></div><div>
+        <div class="when">1 1 月 末 　 上 海</div><div class="what">上海タワー トップ10</div>
+        <div class="why">ロングがどこまで伸びたかを、世界の中で測る</div></div></div>
+      <div class="stepr top"><div class="dot"></div><div>
+        <div class="when">そ の 先</div><div class="what">世界一</div>
+        <div class="why">来年の海外遠征に向けて、長距離能力を伸ばす</div></div></div>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="sec">
+    <div class="eyebrow rv">基 準</div>
+    <h2 class="h2 rv">順位じゃない。時計だ。</h2>
+    <div class="clocks">
+      <div class="clock rv"><div class="race">東 京 タ ワ ー</div><div class="cond">市役所3本<br>全部1分切りで通せる</div></div>
+      <div class="clock rv"><div class="race">都 庁</div><div class="cond">市役所<br>4〜5本通せる</div></div>
+      <div class="clock rv"><div class="race">上 海</div><div class="cond">東山バーティカル<br>18分半</div></div>
+    </div>
+    <div class="bodyline rv">
+      測る場所は 市役所・太郎坊・東山。そこから逆算して練習を組む。<br>
+      体は <b>70kg / 体脂肪10%</b> まで絞る　<span style="color:#5f6880">（現在 74kg / 16%）</span>
+    </div>
+    <div class="note cool rv">
+      総時間や本数は、ただの記録であって指標じゃない。日本一になっても、コースレコードを一つも持っていないなら、本当の意味ではまだ勝っていない。<b>まだ見ぬライバルと今日戦う唯一の方法が、時計だ。</b>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="sec">
+    <div class="eyebrow rv">こ こ か ら 埋 め る</div>
+    <div class="empty rv"><div class="ttl">現 在 地 （ ベ ン チ マ ー ク ）</div>
+      <div class="msg">まだ空。<b>市役所コースで一度測るまで、逆算が始められない。</b><br>怪我明けの最初の一本が、ここに入る。</div></div>
+    <div class="empty rv"><div class="ttl">練 習 の 組 み 方</div>
+      <div class="msg">まだ空。伸ばす能力と、それを伸ばすメニューの対応表が入る。<br><b>行き当たりばったりでトレーニングしない</b>——そのための場所。</div></div>
+    <div class="empty rv"><div class="ttl">今 週 の T o D o</div>
+      <div class="msg">まだ空。<b>ここが空のまま一週間過ぎたら、その週は進んでいない。</b></div></div>
+    <div class="empty rv"><div class="ttl">怪 我 と 体 の 状 態</div>
+      <div class="msg">まだ空。復帰までの経過と、やっていいこと・だめなことが入る。</div></div>
+    <div class="empty rv"><div class="ttl">レ ー ス 記 録</div>
+      <div class="msg">まだ空。出た大会と時計が全部並ぶ。<b>時計が伸びていなければ、練習が間違っている。</b></div></div>
+  </section>
+  <div class="backfoot"><a href="#home">◀　ホ ー ム へ</a></div>
+  <footer>D I E　W I T H　N O　R E G R E T</footer>
+</div>
+
+<!-- ==================== 収入と自由 ==================== -->
+<div class="page" id="money" data-title="収 入 と 自 由">
+  <section class="sec">
+    <div class="eyebrow rv">F R E E D O M</div>
+    <h2 class="h2 rv">金は目的じゃない。<br>時間を買うための手段だ。</h2>
+    <div class="money rv">
+      <div><div class="mnum mfrom">25<small>万</small></div><div class="mlab">デ リ バ リ ー （ 固 定 ）</div></div>
+      <div class="marrow">→</div>
+      <div><div class="mnum mto">25<small>万</small></div><div class="mlab">別 の 柱 だ け で</div></div>
+    </div>
+    <div class="freeline rv">
+      ここでデリバリーをやめられる。<br>走る時間が、まるごと手に入る。
+      <small>そこから 年内 月50万 → 100万へ。来年の遠征費から逆算した、動かせない期日</small>
+    </div>
+    <div class="note gold rv" style="margin-top:40px">
+      いまの人生は分断されている。時間も頭も、デリバリー・収入の柱・本命の競技に裂かれている。裂かれているから全部が中途半端になる。あれは怠けじゃない、<b>分断された人生の症状</b>だ。<br>
+      何が裂いているのか。時間を切り売りしていることだ。それが鎖で、収入の柱はその鎖を断つ唯一のレバー。だからこれは競技と張り合う別の目標じゃない。<b>分断された自分を、世界一という一点に束ね直すための鍵だ。</b>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="sec">
+    <div class="eyebrow rv">こ こ か ら 埋 め る</div>
+    <div class="empty rv"><div class="ttl">柱 は 何 か</div>
+      <div class="msg">まだ空。<b>ここが決まっていないのが、今の最大の未決だ。</b><br>FX ／ アプリ開発・販売 ／ ブログ・note。FXは手段であって目的じゃない。</div></div>
+    <div class="empty rv"><div class="ttl">い ま の 数 字</div>
+      <div class="msg">まだ空。デリバリーと別の柱、それぞれの月次が入る。<br><b>数字が動いていなければ、方針が間違っている。</b></div></div>
+    <div class="empty rv"><div class="ttl">柱 を 立 て る た め の T o D o</div>
+      <div class="msg">まだ空。</div></div>
+    <div class="empty rv"><div class="ttl">学 ん だ こ と （ F X ・ 事 業 ）</div>
+      <div class="msg">まだ空。1400万を溶かした経験から抽出したものも、ここに入る。<br><b>同じ道を二度行かないための場所。</b></div></div>
+  </section>
+  <div class="backfoot"><a href="#home">◀　ホ ー ム へ</a></div>
+  <footer>D I E　W I T H　N O　R E G R E T</footer>
+</div>
+
+<!-- ==================== 価値観と自己像 ==================== -->
+<div class="page" id="self" data-title="価 値 観 と 自 己 像">
+  <section class="sec">
+    <div class="eyebrow rv">大 事 な 価 値 観</div>
+    <h2 class="h2 rv">迷ったら、この順番で決める。</h2>
+    <div class="umb rv">す べ て を 包 む 傘<b>充実 — 充実した人生を生きる</b></div>
+    <div>
+      <div class="vrow top1 rv"><div class="r">1</div><div class="v">自由（独立）</div></div>
+      <div class="vrow top2 rv"><div class="r">2</div><div class="v">自己実現</div></div>
+      <div class="vrow top3 rv"><div class="r">3</div><div class="v">成長／自己研鑽</div></div>
+      <div class="vrow rv"><div class="r">4</div><div class="v">挑戦／情熱／達成</div></div>
+      <div class="vrow spark rv"><div class="r">5</div><div class="v">ワクワク／高揚感／冒険</div></div>
+      <div class="vrow rv"><div class="r">6</div><div class="v">快適／掌握</div></div>
+      <div class="vrow rv"><div class="r">7</div><div class="v">魅力</div></div>
+      <div class="vrow rv"><div class="r">8</div><div class="v">絆</div></div>
+      <div class="vrow rv"><div class="r">9</div><div class="v">思い出</div></div>
+      <div class="vrow rv"><div class="r">10</div><div class="v">快楽</div></div>
+      <div class="vrow rv"><div class="r">11</div><div class="v">健康／体力</div></div>
+      <div class="vrow rv"><div class="r">12</div><div class="v">笑い</div></div>
+    </div>
+    <div class="note rv">
+      <b>ワクワク／高揚感／冒険を5位に上げた理由。</b><br>
+      淡々と動ける人間もいる。俺はそうじゃない。ワクワクしないものは、そもそも見ない。見ないものは振り返らない。振り返らないものは回らない。<br>
+      モーニングルーティンも、アファメーションも、ビジュアライゼーションも、続かなかった理由は全部これ一つだ。だからこれは好みの問題ではなく、<b>行動できるかどうかの前提条件</b>として上に置く。
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="sec">
+    <div class="eyebrow rv">未 来 の 自 分</div>
+    <h2 class="h2 rv">俺は、こういう人間だ。</h2>
+    <div class="iam">
+      <div class="c rv">俺は、朝決めた時間に、<b>目覚ましが鳴った瞬間に起きる</b>人間だ。</div>
+      <div class="c rv">俺は、ネガティブな感情が湧いても、その感情に囚われない。<b>エネルギーの高い状態を保って</b>、理想の人生に必要な行動を取る。</div>
+      <div class="c rv">俺は、理想の未来が明確だ。そこから逆算した行動が明確だから、<b>迷わない</b>。朝もぼーっとしない。淡々とやって、すぐ終わる。</div>
+      <div class="c rv">俺は、自分の理想の人生につながる時間に、<b>全力でフォーカスしている</b>。</div>
+      <div class="c rv">俺は、行き当たりばったりでトレーニングしない。目標があり、伸ばす能力があり、達成する指標があり、<b>練習の組み方が明確</b>だ。</div>
+      <div class="c rv">俺は、問題が起きても修正できる。シナリオを立てて、こうなったらこうすると決まっているから、<b>何の迷いもなく毎日集中できる</b>。</div>
+      <div class="c rv">俺は、時間を配分して、自己実現に必要なことを、やるべきときにやる。トレーニングも勉強もケアも食事も、<b>全部並行して回している</b>。</div>
+      <div class="c rv">俺は、勉強する時間をちゃんと取る。出た気づきをストックし、ToDoに落とし、システムに乗せて、<b>淡々と潰していく</b>。</div>
+      <div class="c rv">俺は、競技だけじゃない。収入の柱にも時間を配分している。<b>あらゆる方面が同時にアップデートしていく</b>人間だ。</div>
+      <div class="c rv">俺は、目標を定めたら、<b>全身全霊、全集中で、どんな困難も乗り越えていく</b>人間だ。</div>
+    </div>
+    <div class="declare rv">俺は世界トップアスリートだ。<br><span>俺は世界一になる人間だ。</span></div>
+  </section>
+  <div class="backfoot"><a href="#home">◀　ホ ー ム へ</a></div>
+  <footer>D I E　W I T H　N O　R E G R E T</footer>
+</div>
+
+<!-- ==================== 哲学ストック ==================== -->
+<div class="page" id="philosophy" data-title="哲 学 ス ト ッ ク">
+  <section class="sec">
+    <div class="eyebrow rv">判 断 基 準</div>
+    <h2 class="h2 rv">迷ったら、この二枚を通す。</h2>
+    <div class="gate rv"><div class="gk">1 枚 目</div>
+      <div class="gq">それは、自分を爆速で成長させ、自己変革を起こし、最短最速で成果に繋げることに、直接つながるか。</div></div>
+    <div class="gate two rv"><div class="gk">2 枚 目</div>
+      <div class="gq">それを、自分が見たいと思うか。ワクワクするか。</div></div>
+    <div class="note rv">
+      正しくても、ワクワクしないものは見ない。見ないものは振り返らない。振り返らないものは回らない。<b>だから2枚目は飾りではなく、1枚目が成立するための条件になっている。</b>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section class="sec">
+    <div class="eyebrow rv">ス ト ッ ク</div>
+    <h2 class="h2 rv">二度と忘れないための言葉。</h2>
+    <div class="ph rv"><div class="pt">課題ファースト。</div><div class="pb">課題のないインプットも言語化も、全部流れて消える。課題があるから、何をインプットするかを選べる。何を抽出するかが決まる。</div></div>
+    <div class="ph rv"><div class="pt">本質は抽出。手段は可変。</div><div class="pb">手段を本質の位置に置くと、手段が古びたときに全部止まる。三回読むのも三列も、今の自分に効くというだけで、唯一の正解ではない。</div></div>
+    <div class="ph rv"><div class="pt">先に目的を決める。</div><div class="pb">それをすることで他の全てが容易になるか、他の全てが不必要になる。その1つは何か。</div></div>
+    <div class="ph rv"><div class="pt">AIに舵を渡すな。</div><div class="pb">AIは一般論を返す。答えを出すのは自分。お題を作るのも自分。渡した瞬間に破滅の道が始まる。</div></div>
+    <div class="ph rv"><div class="pt">忘れることを怖いと思え。</div><div class="pb">10年分の大きな気づきを全部忘れた。だから棒に振った。怖いと思わなければ、また同じ道を行く。</div></div>
+    <div class="ph rv"><div class="pt">想像には天井がある。</div><div class="pb">自分が経験していないことは想像できない。だから「何ができるかを知る」ことは、固定概念を取っ払うことと同じくらい重要。今の自分が想像できないものが作れる、と思って挑む。</div></div>
+    <div class="ph rv"><div class="pt">トライが天井を上げる。</div><div class="pb">トライして返ってきたアウトプットで殻が破れ、「こういうものも作れるんだ」と分かる。そのたびに発想力そのものが一段上がる。順番は、想像 → 小さくトライ → 天井が上がる → 想像し直す。</div></div>
+    <div class="ph rv"><div class="pt">ワクワクが動力。</div><div class="pb">淡々と動ける人間もいるが、自分はそうではない。ワクワクしないものは、そもそも見ない。だからワクワクは好みの問題ではなく、行動できるかどうかの前提条件。</div></div>
+    <div class="ph rv"><div class="pt">枠に縛られるな。</div><div class="pb">Notionならここまでできると思い込んで、その枠の中で理想を実現しようとして無理だった。枠のほうが小さかった。自分がこうしたいと思うものは、今はそのまま作れる。</div></div>
+    <div class="ph rv"><div class="pt">実行しっぱなしも失敗。</div><div class="pb">行動した後、課題解決に向かったか、目標達成に繋がっているかを見る。その反省もシステムの中で言語化する。出口が、そのまま次の入口になる。だから回る。</div></div>
+    <div class="empty rv" style="margin-top:34px"><div class="ttl">次 の 一 つ</div>
+      <div class="msg">まだ空。<b>ノートアプリを回して出てきたものが、ここに積まれていく。</b></div></div>
+  </section>
+  <div class="backfoot"><a href="#home">◀　ホ ー ム へ</a></div>
+  <footer>D I E　W I T H　N O　R E G R E T</footer>
+</div>
+
+<!-- ==================== プロジェクト ==================== -->
+<div class="page" id="projects" data-title="プ ロ ジ ェ ク ト">
+  <section class="sec">
+    <div class="eyebrow rv">P R O J E C T S</div>
+    <h2 class="h2 rv">立ったものは、一つずつページにする。</h2>
+    <div class="prj rv"><div class="pk">P 0 1</div><div class="pn">システム構築（ノートアプリ）</div>
+      <div class="pd">言語化して抽出する工場。ここで出たものが、このページ全体を改善していく。プロトタイプを作って、まず一周回すのが目標。</div>
+      <div class="pstat live">進 行 中</div></div>
+    <div class="prj rv"><div class="pk">P 0 2</div><div class="pn">オフィシャルページ</div>
+      <div class="pd">このページ自体。抽出したものを載せて、これ通りに動けば理想が叶う状態まで作り込み続ける。</div>
+      <div class="pstat live">進 行 中</div></div>
+    <div class="prj rv"><div class="pk">P 0 3</div><div class="pn">バリューランタン</div>
+      <div class="pd">まだ手をつけていない。中身と、やる理由をここに書く。</div>
+      <div class="pstat">未 着 手</div></div>
+    <div class="prj rv"><div class="pk">P 0 4</div><div class="pn">ACT（実践ノート）</div>
+      <div class="pd">実践して、その記録を残す。ここに何をどう回すかを書く。</div>
+      <div class="pstat">未 着 手</div></div>
+    <div class="prj rv"><div class="pk">P 0 5</div><div class="pn">収入の柱を決める</div>
+      <div class="pd">FX ／ アプリ開発・販売 ／ ブログ・note。何を柱にするかを確定させる。今の最大の未決。</div>
+      <div class="pstat live">未 決</div></div>
+    <div class="empty rv" style="margin-top:24px"><div class="ttl">新 し く 立 っ た プ ロ ジ ェ ク ト</div>
+      <div class="msg">まだ空。<b>必要なプロジェクトが出たら、必ずここに一枚起こす。</b><br>起こさなかったものは、必ず消える。</div></div>
+  </section>
+  <div class="backfoot"><a href="#home">◀　ホ ー ム へ</a></div>
+  <footer>D I E　W I T H　N O　R E G R E T</footer>
+</div>
+
+<!-- ==================== 軌跡 ==================== -->
+<div class="page" id="track" data-title="軌 跡">
+  <section class="sec">
+    <div class="eyebrow rv">T R A C K</div>
+    <h2 class="h2 rv">ここが、埋まっていく。</h2>
+    <div class="track">
+      <div class="tk done rv"><div class="d">2 0 2 6 . 0 7</div>
+        <div class="x">怪我で完全休養に入る。空いた時間を全部、自分を変えるシステムの構築に充てると決めた。</div></div>
+      <div class="tk done rv"><div class="d">2 0 2 6 . 0 7</div>
+        <div class="x">「本質は抽出、手段は可変」に到達。三列も記号も手段でしかないと確定した。</div></div>
+      <div class="tk done rv"><div class="d">2 0 2 6 . 0 7</div>
+        <div class="x">ワクワクを判断基準の2枚目に昇格。価値観の5位に置き直した。</div></div>
+      <div class="tk done rv"><div class="d">2 0 2 6 . 0 7</div>
+        <div class="x">オフィシャルページを立てた。ノートアプリで抽出 → ここに載せる → その通りに動く、というループが決まった。</div></div>
+      <div class="tk blank rv"><div class="d">— — —</div><div class="x">次 の 一 つ</div></div>
+      <div class="tk blank rv"><div class="d">— — —</div><div class="x">そ の 次</div></div>
+    </div>
+    <div class="empty rv" style="margin-top:28px">
+      <div class="msg">
+        ここが空いているということは、<b>今日まだ何も積んでいない</b>ということ。<br>
+        毎朝ここを見る。埋まっていれば進んでいる。空白が続けば、それが答えだ。
+      </div>
+    </div>
+  </section>
+  <div class="backfoot"><a href="#home">◀　ホ ー ム へ</a></div>
+  <footer>D I E　W I T H　N O　R E G R E T</footer>
+</div>
+
+<!-- ==================== 仕組み ==================== -->
+<div class="page" id="system" data-title="こ の ペ ー ジ の 仕 組 み">
+  <section class="sec">
+    <div class="eyebrow rv">S Y S T E M</div>
+    <h2 class="h2 rv">回して、載せて、その通りに動く。</h2>
+    <p class="lead rv">ノートアプリは工場。そこで言語化して、抽出する。<br>このページは倉庫じゃない。<b style="color:#fff">自分のOSだ。</b>工場で作っているのはパーツではなく、OSのアップデート。</p>
+    <div class="loopmini rv" style="justify-content:flex-start;margin:32px 0 28px">
+      <span>ノートアプリで回す</span><span class="arw">→</span>
+      <span>抽出する</span><span class="arw">→</span>
+      <span>このページに載せる</span><span class="arw">→</span>
+      <span>その通りに動く</span><span class="arw">→</span>
+      <span>反省が次の課題になる</span><span class="arw">↻</span>
+    </div>
+    <div class="note rv"><b>ここに載せるのは、ループから出てきたものだけ。</b><br>
+      このページのために直接書き始めた瞬間、言葉が発信用になって、抽出が死ぬ。</div>
+    <div class="note cool rv"><b>トップは増やさない。奥だけ増える。</b><br>
+      表は毎朝見る一枚。ほとんど変わらない。抽出物が積まれるのは各ページの中だけ。この線を越えた瞬間、トップが重くなって、見なくなる。</div>
+    <div class="note gold rv"><b>空欄は消さない。</b><br>
+      空いているところが見えることが、そのまま催促になる。埋まっていれば進んでいる。空白が続けば、それが答えだ。</div>
+    <p class="big rv" style="margin-top:52px">このページ通りに進めば、<br><em>理想の人生が手に入る。</em></p>
+    <p class="lead rv" style="text-align:center;color:#79839a">そうなるまで、ずっと改善し続ける。</p>
+  </section>
+  <div class="backfoot"><a href="#home">◀　ホ ー ム へ</a></div>
+  <footer>D I E　W I T H　N O　R E G R E T</footer>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* カウントダウン：計算して1回入れるだけ */
+  var now=new Date(),y=now.getFullYear(),t=new Date(y,10,15);
+  if(t<now)t=new Date(y+1,10,15);
+  var today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  var d=Math.ceil((t-today)/86400000);
+  document.getElementById('days').innerHTML=d+'<span>日</span>';
+
+  /* 出現：一度出たら監視をやめる。IOが無い環境では全部表示 */
+  var io=null;
+  if('IntersectionObserver' in window){
+    io=new IntersectionObserver(function(es){
+      for(var i=0;i<es.length;i++){
+        if(es[i].isIntersecting){es[i].target.classList.add('on');io.unobserve(es[i].target);}
+      }
+    },{rootMargin:'0px 0px -5% 0px',threshold:0.01});
+  }
+  function watch(page){
+    var els=page.querySelectorAll('.rv:not(.on)');
+    for(var i=0;i<els.length;i++){
+      if(io)io.observe(els[i]); else els[i].classList.add('on');
+    }
+  }
+
+  var pages=document.querySelectorAll('.page');
+  var tbTitle=document.getElementById('tbTitle');
+  function show(id){
+    var found=null;
+    for(var i=0;i<pages.length;i++){
+      var on=(pages[i].id===id);
+      pages[i].classList.toggle('active',on);
+      if(on)found=pages[i];
+    }
+    if(!found){location.hash='#home';return;}
+    document.body.classList.toggle('sub',id!=='home');
+    tbTitle.textContent=found.getAttribute('data-title')||'';
+    window.scrollTo(0,0);
+    watch(found);
+  }
+  function route(){show((location.hash||'#home').slice(1)||'home');}
+  window.addEventListener('hashchange',route);
+  route();
+})();
+</script>
+</body>
+</html>
