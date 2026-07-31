@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05070c">
+<title>NOTE</title>
+<!-- ============================================================
+     モバイルで壊れない制約（厳守）
+     position:fixed なし / position:sticky なし / canvas なし
+     infinite animation なし / backdrop-filter なし
+     filter:drop-shadow なし / 大きな blur 影なし
+     requestAnimationFrame ループなし
+     ============================================================ -->
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#05070c; --panel:#0c1018; --panel2:#111725;
+  --line:#1e2637; --ink:#e8ecf4; --dim:#8a94a8; --dim2:#5c6678;
+  --accent:#ff8c3c; --accent2:#ffb066; --star:#ffd15c;
+}
+html,body{background:var(--bg);color:var(--ink)}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  line-height:1.8; -webkit-font-smoothing:antialiased;
+  overflow-x:hidden; font-size:16px;
+  padding-bottom:60px;
+}
+.wrap{max-width:760px;margin:0 auto;padding:0 14px}
+
+/* ---- ヘッダ ---- */
+header{border-bottom:1px solid var(--line);padding:14px 0;margin-bottom:16px}
+.hrow{display:flex;align-items:center;gap:10px}
+.logo{font-size:17px;font-weight:900;letter-spacing:.18em;color:var(--accent)}
+.sp{flex:1}
+.tabs{display:flex;gap:6px;margin-top:12px}
+.tab{
+  flex:1;text-align:center;padding:9px 4px;border:1px solid var(--line);
+  border-radius:8px;background:var(--panel);color:var(--dim);
+  font-size:13px;font-weight:700;cursor:pointer;
+}
+.tab.on{background:var(--accent);border-color:var(--accent);color:#1a0d02}
+
+/* ---- 共通パーツ ---- */
+.view{display:none}
+.view.on{display:block}
+label.lb{display:block;font-size:11px;letter-spacing:.14em;color:var(--dim2);margin:0 0 6px;font-weight:700}
+input[type=text],textarea,select{
+  width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  color:var(--ink);padding:12px 13px;font-size:16px;font-family:inherit;line-height:1.7;
+  outline:none;
+}
+input[type=text]:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:240px}
+.btn{
+  display:inline-block;border:1px solid var(--line);background:var(--panel2);
+  color:var(--ink);padding:11px 16px;border-radius:10px;font-size:14px;
+  font-weight:700;cursor:pointer;font-family:inherit;
+}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#1a0d02}
+.btn.ghost{background:transparent;color:var(--dim)}
+.btn.sm{padding:7px 11px;font-size:12.5px}
+.btn:active{opacity:.7}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.mt{margin-top:14px}
+.mt2{margin-top:26px}
+.hint{font-size:12.5px;color:var(--dim2);line-height:1.75}
+
+/* ---- お題 ---- */
+.topicbar{display:flex;gap:8px;align-items:stretch}
+.topicbar input{flex:1}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.chip{
+  border:1px solid var(--line);background:var(--panel);color:var(--dim);
+  padding:6px 11px;border-radius:999px;font-size:12.5px;cursor:pointer;
+}
+.chip:active{border-color:var(--accent);color:var(--accent)}
+
+/* ---- エントリ ---- */
+.entry{
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:14px;margin-bottom:11px;
+}
+.entry.starred{border-color:#4a3a12;background:#0f1017}
+.emeta{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.edate{font-size:11.5px;color:var(--dim2);letter-spacing:.05em}
+.etopic{font-size:13.5px;font-weight:800;color:var(--accent2);flex:1;word-break:break-word}
+.star{font-size:17px;color:#2c3446;cursor:pointer;line-height:1;padding:2px 4px}
+.star.on{color:var(--star)}
+.ebody{
+  font-size:14.5px;color:#cfd6e4;white-space:pre-wrap;word-break:break-word;
+  max-height:112px;overflow:hidden;
+}
+.ebody.open{max-height:none}
+.eorg{
+  margin-top:11px;padding:11px 12px;background:#0a1a14;border:1px solid #17352a;
+  border-radius:9px;font-size:14px;color:#cfe8dd;white-space:pre-wrap;word-break:break-word;
+}
+.eorg .oh{font-size:10.5px;letter-spacing:.14em;color:#4bbf8f;font-weight:800;display:block;margin-bottom:5px}
+.eact{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.empty{text-align:center;color:var(--dim2);padding:50px 20px;font-size:14px}
+
+/* ---- 日付見出し ---- */
+.dayhead{
+  font-size:11.5px;letter-spacing:.16em;color:var(--dim2);font-weight:800;
+  padding:16px 0 8px;border-top:1px solid var(--line);margin-top:6px;
+}
+.dayhead:first-child{border-top:none;margin-top:0;padding-top:2px}
+
+/* ---- トースト（固定配置は使わない：本文先頭に差す） ---- */
+#toast{
+  display:none;margin:0 0 12px;padding:11px 13px;border-radius:9px;
+  background:#12261c;border:1px solid #1f4a35;color:#8fe0b8;font-size:13.5px;
+}
+#toast.err{background:#2a1216;border-color:#5a2029;color:#ffb0bd}
+#toast.on{display:block}
+
+/* ---- 設定 ---- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:12px}
+.card h3{font-size:13px;letter-spacing:.1em;color:var(--accent2);margin-bottom:9px;font-weight:800}
+.stat{font-size:13px;color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="hrow">
+      <div class="logo">NOTE</div>
+      <div class="sp"></div>
+      <div class="stat" id="count">0</div>
+    </div>
+    <div class="tabs">
+      <div class="tab on" data-v="write">書く</div>
+      <div class="tab" data-v="list">ログ</div>
+      <div class="tab" data-v="conf">設定</div>
+    </div>
+  </header>
+
+  <div id="toast"></div>
+
+  <!-- ============ 書く ============ -->
+  <div class="view on" id="v-write">
+    <label class="lb">お題（空でもいい）</label>
+    <div class="topicbar">
+      <input type="text" id="topic" placeholder="何について考える？">
+    </div>
+    <div class="chips" id="chips"></div>
+
+    <div class="mt">
+      <label class="lb">言語化</label>
+      <textarea id="body" placeholder="そのまま書く。整えなくていい。&#10;iPhoneならキーボードのマイクで喋ればいい。"></textarea>
+    </div>
+
+    <div class="row mt">
+      <button class="btn primary" id="save">保存する</button>
+      <button class="btn" id="saveorg">保存して整理</button>
+      <button class="btn ghost sm" id="clear">消す</button>
+    </div>
+    <p class="hint mt">保存すると下の「ログ」に時系列で積まれる。自動保存もされてるから、閉じても書きかけは消えない。</p>
+  </div>
+
+  <!-- ============ ログ ============ -->
+  <div class="view" id="v-list">
+    <div class="row">
+      <input type="text" id="q" placeholder="検索" style="flex:1">
+      <button class="btn sm" id="fstar">★だけ</button>
+    </div>
+    <div class="mt" id="list"></div>
+  </div>
+
+  <!-- ============ 設定 ============ -->
+  <div class="view" id="v-conf">
+
+    <div class="card">
+      <h3>持ち出す / 持ち込む</h3>
+      <p class="hint">記録はこの端末の中だけにある。iPhoneとPCで同じものを見たいときは、書き出して、もう一方で読み込む。</p>
+      <div class="row mt">
+        <button class="btn sm" id="exp">全部コピー（テキスト）</button>
+        <button class="btn sm" id="expmd">.md で保存</button>
+        <button class="btn sm" id="expj">.json で保存</button>
+      </div>
+      <div class="mt">
+        <label class="lb">読み込む（.json の中身を貼る）</label>
+        <textarea id="impbox" style="min-height:90px" placeholder='[{"id":...}]'></textarea>
+        <div class="row mt"><button class="btn sm" id="imp">読み込む（追加）</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>整理（AI）</h3>
+      <p class="hint">キーを入れると「整理」ボタンが動く。入れなければ、書いたものをコピーして壁打ちに貼れば同じことができる。キーはこの端末の中だけに保存される。</p>
+      <div class="mt">
+        <label class="lb">Anthropic API キー</label>
+        <input type="text" id="apikey" placeholder="sk-ant-...">
+      </div>
+      <div class="mt">
+        <label class="lb">モデル</label>
+        <input type="text" id="model" placeholder="claude-sonnet-4-5">
+      </div>
+      <div class="row mt"><button class="btn sm primary" id="savekey">保存</button></div>
+    </div>
+
+    <div class="card">
+      <h3>お題の候補</h3>
+      <p class="hint">「書く」画面に出るボタン。1行に1つ。</p>
+      <div class="mt"><textarea id="chipsrc" style="min-height:130px"></textarea></div>
+      <div class="row mt"><button class="btn sm primary" id="savechips">保存</button></div>
+    </div>
+
+    <div class="card">
+      <h3>全消し</h3>
+      <div class="row"><button class="btn sm ghost" id="wipe">全部消す</button></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var K = {ent:'note_entries_v1', draft:'note_draft_v1', key:'note_apikey', model:'note_model', chips:'note_chips'};
+var DEFAULT_CHIPS = [
+  "今日いちばん引っかかったこと",
+  "今の課題は何か",
+  "なぜそれが課題なのか",
+  "自分はどうしたいのか",
+  "次の一手は何か",
+  "体と怪我のこと",
+  "トレーニングの記録",
+  "お金・仕事のこと",
+  "気づいたこと"
+].join("\n");
+
+function $(s){return document.querySelector(s)}
+function $$(s){return [].slice.call(document.querySelectorAll(s))}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+function load(){ try{ return JSON.parse(localStorage.getItem(K.ent)||'[]') }catch(e){ return [] } }
+function save(a){ localStorage.setItem(K.ent, JSON.stringify(a)) }
+
+var entries = load();
+var showStarOnly = false;
+
+function toast(msg, isErr){
+  var t=$('#toast'); t.textContent=msg; t.className='on'+(isErr?' err':'');
+  window.scrollTo(0,0);
+  clearTimeout(toast._t);
+  toast._t=setTimeout(function(){ t.className=''; }, 4000);
+}
+
+function fdate(ts){
+  var d=new Date(ts), p=function(n){return n<10?'0'+n:''+n};
+  var w=['日','月','火','水','木','金','土'][d.getDay()];
+  return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+'('+w+') '+p(d.getHours())+':'+p(d.getMinutes());
+}
+function dayKey(ts){
+  var d=new Date(ts), p=function(n){return n<10?'0'+n:''+n};
+  var w=['日','月','火','水','木','金','土'][d.getDay()];
+  return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+p(d.getDate())+'日 '+w+'曜';
+}
+
+/* ---------- タブ ---------- */
+$$('.tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    $$('.tab').forEach(function(x){x.classList.remove('on')});
+    t.classList.add('on');
+    $$('.view').forEach(function(v){v.classList.remove('on')});
+    $('#v-'+t.dataset.v).classList.add('on');
+    if(t.dataset.v==='list') render();
+    window.scrollTo(0,0);
+  });
+});
+
+/* ---------- お題チップ ---------- */
+function renderChips(){
+  var src = localStorage.getItem(K.chips) || DEFAULT_CHIPS;
+  $('#chipsrc').value = src;
+  var box = $('#chips'); box.innerHTML='';
+  src.split('\n').map(function(s){return s.trim()}).filter(Boolean).forEach(function(s){
+    var b=document.createElement('div'); b.className='chip'; b.textContent=s;
+    b.addEventListener('click',function(){ $('#topic').value=s; $('#body').focus(); saveDraft(); });
+    box.appendChild(b);
+  });
+}
+
+/* ---------- 下書き自動保存 ---------- */
+function saveDraft(){
+  localStorage.setItem(K.draft, JSON.stringify({t:$('#topic').value, b:$('#body').value}));
+}
+function loadDraft(){
+  try{ var d=JSON.parse(localStorage.getItem(K.draft)||'{}');
+    if(d.t) $('#topic').value=d.t; if(d.b) $('#body').value=d.b; }catch(e){}
+}
+$('#topic').addEventListener('input', saveDraft);
+$('#body').addEventListener('input', saveDraft);
+
+/* ---------- 保存 ---------- */
+function doSave(){
+  var b=$('#body').value.trim();
+  if(!b){ toast('中身がない', true); return null; }
+  var e={ id:'e'+Date.now()+Math.random().toString(36).slice(2,7),
+          ts:Date.now(), topic:$('#topic').value.trim(), body:b, star:false, org:'' };
+  entries.push(e); save(entries);
+  $('#body').value=''; saveDraft(); updCount();
+  return e;
+}
+$('#save').addEventListener('click', function(){
+  var e=doSave(); if(e) toast('保存した');
+});
+$('#clear').addEventListener('click', function(){
+  $('#body').value=''; saveDraft();
+});
+$('#saveorg').addEventListener('click', function(){
+  var e=doSave(); if(!e) return;
+  toast('保存した。整理してる…');
+  organize(e.id);
+});
+
+function updCount(){ $('#count').textContent = entries.length + '件'; }
+
+/* ---------- 一覧 ---------- */
+function render(){
+  var q=($('#q').value||'').trim().toLowerCase();
+  var box=$('#list'); box.innerHTML='';
+  var arr = entries.slice().sort(function(a,b){return b.ts-a.ts});
+  if(showStarOnly) arr=arr.filter(function(e){return e.star});
+  if(q) arr=arr.filter(function(e){
+    return (e.topic+' '+e.body+' '+(e.org||'')).toLowerCase().indexOf(q)>=0;
+  });
+  if(!arr.length){ box.innerHTML='<div class="empty">まだ何もない</div>'; return; }
+
+  var lastDay='';
+  arr.forEach(function(e){
+    var dk=dayKey(e.ts);
+    if(dk!==lastDay){
+      var h=document.createElement('div'); h.className='dayhead'; h.textContent=dk;
+      box.appendChild(h); lastDay=dk;
+    }
+    var d=document.createElement('div');
+    d.className='entry'+(e.star?' starred':'');
+    d.innerHTML =
+      '<div class="emeta">'+
+        '<span class="star'+(e.star?' on':'')+'" data-a="star">'+(e.star?'★':'☆')+'</span>'+
+        '<span class="etopic">'+esc(e.topic||'（お題なし）')+'</span>'+
+        '<span class="edate">'+fdate(e.ts)+'</span>'+
+      '</div>'+
+      '<div class="ebody">'+esc(e.body)+'</div>'+
+      (e.org?'<div class="eorg"><span class="oh">整理</span>'+esc(e.org)+'</div>':'')+
+      '<div class="eact">'+
+        '<button class="btn sm ghost" data-a="more">全文</button>'+
+        '<button class="btn sm" data-a="org">'+(e.org?'整理しなおす':'整理する')+'</button>'+
+        '<button class="btn sm ghost" data-a="copy">コピー</button>'+
+        '<button class="btn sm ghost" data-a="edit">直す</button>'+
+        '<button class="btn sm ghost" data-a="del">消す</button>'+
+      '</div>';
+
+    d.addEventListener('click', function(ev){
+      var a=ev.target.getAttribute('data-a'); if(!a) return;
+      if(a==='star'){ e.star=!e.star; save(entries); render(); }
+      if(a==='more'){ d.querySelector('.ebody').classList.toggle('open'); ev.target.textContent = d.querySelector('.ebody').classList.contains('open')?'たたむ':'全文'; }
+      if(a==='org'){ toast('整理してる…'); organize(e.id); }
+      if(a==='copy'){ copy(entryText(e)); }
+      if(a==='edit'){
+        $('#topic').value=e.topic; $('#body').value=e.body;
+        entries=entries.filter(function(x){return x.id!==e.id}); save(entries); updCount();
+        $$('.tab')[0].click(); toast('書く画面に戻した。直して保存しなおして');
+      }
+      if(a==='del'){
+        entries=entries.filter(function(x){return x.id!==e.id});
+        save(entries); updCount(); render(); toast('消した');
+      }
+    });
+    box.appendChild(d);
+  });
+}
+$('#q').addEventListener('input', render);
+$('#fstar').addEventListener('click', function(){
+  showStarOnly=!showStarOnly;
+  this.classList.toggle('primary', showStarOnly);
+  this.textContent = showStarOnly?'★だけ（ON）':'★だけ';
+  render();
+});
+
+/* ---------- 書き出し ---------- */
+function entryText(e){
+  return '## '+fdate(e.ts)+(e.topic?'  ['+e.topic+']':'')+'\n\n'+e.body+
+         (e.org?'\n\n--- 整理 ---\n'+e.org:'')+'\n';
+}
+function allText(){
+  return entries.slice().sort(function(a,b){return a.ts-b.ts})
+    .map(function(e){return (e.star?'★ ':'')+entryText(e)}).join('\n---\n\n');
+}
+function copy(t){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){toast('コピーした')},function(){fallback(t)});
+  } else fallback(t);
+}
+function fallback(t){
+  var ta=document.createElement('textarea'); ta.value=t;
+  ta.style.position='absolute'; ta.style.left='-9999px';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); toast('コピーした'); }catch(e){ toast('コピーできなかった',true); }
+  document.body.removeChild(ta);
+}
+function dl(name, text, mime){
+  var b=new Blob([text],{type:mime||'text/plain;charset=utf-8'});
+  var u=URL.createObjectURL(b); var a=document.createElement('a');
+  a.href=u; a.download=name; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(u)},1000);
+}
+$('#exp').addEventListener('click', function(){ copy(allText()) });
+$('#expmd').addEventListener('click', function(){ dl('note_'+Date.now()+'.md', allText(),'text/markdown') });
+$('#expj').addEventListener('click', function(){ dl('note_'+Date.now()+'.json', JSON.stringify(entries),'application/json') });
+$('#imp').addEventListener('click', function(){
+  try{
+    var a=JSON.parse($('#impbox').value);
+    if(!Array.isArray(a)) throw 0;
+    var have={}; entries.forEach(function(e){have[e.id]=1});
+    var n=0; a.forEach(function(e){ if(e && e.body && !have[e.id]){ entries.push(e); n++; } });
+    save(entries); updCount(); $('#impbox').value='';
+    toast(n+'件 追加した');
+  }catch(e){ toast('読み込めなかった', true) }
+});
+
+/* ---------- 設定 ---------- */
+$('#savekey').addEventListener('click', function(){
+  localStorage.setItem(K.key, $('#apikey').value.trim());
+  localStorage.setItem(K.model, $('#model').value.trim()||'claude-sonnet-4-5');
+  toast('保存した');
+});
+$('#savechips').addEventListener('click', function(){
+  localStorage.setItem(K.chips, $('#chipsrc').value);
+  renderChips(); toast('保存した');
+});
+$('#wipe').addEventListener('click', function(){
+  if(!entries.length){ toast('もう空'); return; }
+  if($('#wipe').dataset.armed){
+    entries=[]; save(entries); updCount(); render();
+    $('#wipe').dataset.armed=''; $('#wipe').textContent='全部消す';
+    toast('全部消した');
+  } else {
+    $('#wipe').dataset.armed='1'; $('#wipe').textContent='本当に消す？（もう一度押す）';
+    setTimeout(function(){ $('#wipe').dataset.armed=''; $('#wipe').textContent='全部消す'; }, 6000);
+  }
+});
+
+/* ---------- 整理（AI） ---------- */
+var ORG_PROMPT =
+"以下は本人が頭の中をそのまま吐き出したテキストです。要約しないでください。整えて、漏らさないでください。\n"+
+"本人の言葉づかいをできるだけ残し、勝手な解釈や一般論を足さないこと。書かれていないことは書かないこと。\n"+
+"次の形式で出力してください。該当がない項目は「なし」とだけ書いてください。見出し以外の記号や装飾は使わないこと。\n\n"+
+"■ 言っていること\n（本人の言葉のまま、短い文に分けて並べる）\n\n"+
+"■ 出ている答え\n（本人がすでに結論として言っていること）\n\n"+
+"■ まだ答えが出ていないこと\n（本人が問いのまま放置していること）\n\n"+
+"■ 次の一手\n（本文から読み取れる、いちばん近い具体的な行動を1つだけ）\n";
+
+function organize(id){
+  var e=null; for(var i=0;i<entries.length;i++) if(entries[i].id===id) e=entries[i];
+  if(!e) return;
+  var key=localStorage.getItem(K.key), model=localStorage.getItem(K.model)||'claude-sonnet-4-5';
+  if(!key){
+    copy(ORG_PROMPT+"\n----\n"+(e.topic?"お題："+e.topic+"\n\n":"")+e.body);
+    toast('キーがないから、整理用の文をコピーした。壁打ちに貼れば同じことになる');
+    return;
+  }
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'content-type':'application/json',
+      'x-api-key':key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body: JSON.stringify({
+      model: model, max_tokens: 2000,
+      messages:[{role:'user', content: ORG_PROMPT+"\n----\n"+(e.topic?"お題："+e.topic+"\n\n":"")+e.body}]
+    })
+  }).then(function(r){ return r.json() })
+  .then(function(j){
+    if(j && j.content && j.content[0] && j.content[0].text){
+      e.org = j.content[0].text.trim(); save(entries);
+      $$('.tab')[1].click();
+      toast('整理した');
+    } else {
+      toast('整理できなかった：'+((j&&j.error&&j.error.message)||'不明'), true);
+    }
+  })
+  .catch(function(err){ toast('つながらなかった：'+err.message, true) });
+}
+
+/* ---------- 起動 ---------- */
+renderChips();
+loadDraft();
+updCount();
+$('#apikey').value = localStorage.getItem(K.key)||'';
+$('#model').value  = localStorage.getItem(K.model)||'claude-sonnet-4-5';
+
+})();
+</script>
+</body>
+</html>
