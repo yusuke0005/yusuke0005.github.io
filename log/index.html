@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=6, user-scalable=yes">
+<title>思考ログ</title>
+<!-- ============================================================
+     モバイルで壊れない制約（厳守）
+     position:fixed なし / position:sticky なし / canvas なし
+     infinite animation なし / backdrop-filter なし
+     filter:drop-shadow なし / 大きな blur 影なし
+     requestAnimationFrame ループなし / 外部CDNなし
+     ============================================================ -->
+<style>
+  *{box-sizing:border-box;-webkit-text-size-adjust:none}
+  html,body{margin:0;padding:0;background:#f4f4f2;color:#16150f}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif}
+
+  /* ---- 操作バー（通常フロー。fixed禁止） ---- */
+  .bar{background:#16150f;color:#f4f4f2;padding:7px 8px;font-size:13px;line-height:1.4}
+  .bar .grp{display:inline-block;margin-right:14px;white-space:nowrap}
+  .bar b{font-weight:600;opacity:.55;margin-right:5px;font-size:11px;letter-spacing:.04em}
+  .bar button{font:inherit;font-size:13px;background:#3a382c;color:#f4f4f2;border:0;border-radius:3px;
+              padding:4px 10px;margin-right:3px;cursor:pointer;-webkit-appearance:none}
+  .bar button:active{background:#5c5a48}
+  .bar button.on{background:#c8a03c;color:#16150f}
+  .bar .cnt{opacity:.55;font-size:12px}
+  .tagbar{background:#26251b;padding:6px 8px}
+  .tagbar button{font-size:12px;padding:3px 8px;margin:2px 3px 2px 0;background:#3a382c;color:#e8e6dc;
+                 border:0;border-radius:11px;cursor:pointer;-webkit-appearance:none}
+  .tagbar button.on{background:#c8a03c;color:#16150f}
+
+  /* ---- 表本体。フォントサイズを動かすとまるごと拡大縮小する ---- */
+  #zoom{font-size:16px}                 /* JSが書き換える。全部emで組んであるので比例して動く */
+  .sheet{width:62em;margin:0 auto;padding:0.6em 0 4em}
+  @media (max-width:640px){ .sheet{margin:0} }
+
+  .head{display:flex;background:#e2e0d6;border:1px solid #b9b6a5;border-bottom:0;
+        font-size:.68em;letter-spacing:.08em;color:#5c5a48;font-weight:600}
+  .head div{padding:.45em .6em;border-right:1px solid #cbc8b8}
+  .head div:last-child{border-right:0}
+
+  .rows{border:1px solid #b9b6a5;background:#fff}
+  .row{display:flex;border-bottom:1px solid #ddd9c9;cursor:pointer}
+  .row:last-child{border-bottom:0}
+  .row:nth-child(even){background:#fbfaf6}
+  .row.open{background:#fffdf2}
+  .row>div{padding:.5em .6em;border-right:1px solid #ececdf;overflow:hidden;min-width:0}
+  .row>div:last-child{border-right:0}
+
+  .c-date{width:5em;flex:0 0 5em;font-size:.72em;color:#8a8775;line-height:1.5;padding-top:.75em}
+  .c-title{width:12em;flex:0 0 12em;font-size:.8em;font-weight:600;line-height:1.45}
+  .c-org{width:24em;flex:0 0 24em;font-size:.78em;line-height:1.62}
+  .c-raw{width:21em;flex:1 1 21em;font-size:.74em;line-height:1.6;color:#5d5b4c}
+
+  /* 俯瞰モード：セルを刈り込んで、全部を一望できる高さに揃える */
+  .clamp .c-org,.clamp .c-raw{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}
+  .row.open .c-org,.row.open .c-raw{display:block;-webkit-line-clamp:none}
+
+  .c-org strong{font-weight:700}
+  .c-org mark{background:#ffe9a3;color:inherit;padding:0 .1em}
+  .c-org .h{display:block;font-weight:700;margin:.5em 0 .1em;color:#3a382c}
+  .c-org .li{display:block;padding-left:1em;text-indent:-1em}
+  .tags{margin-top:.4em}
+  .tags span{display:inline-block;font-size:.85em;background:#eceadd;color:#6b6957;
+             border-radius:2px;padding:0 .35em;margin:0 .25em .2em 0}
+  .empty{padding:2em .8em;color:#8a8775;font-size:.85em;text-align:center;background:#fff}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <span class="grp"><b>ZOOM</b>
+    <button onclick="Z(-1)">−</button><button onclick="Z(1)">＋</button><button onclick="Zfit()">全体</button>
+  </span>
+  <span class="grp"><b>本文</b>
+    <button id="bClamp" onclick="Clamp()">たたむ</button>
+  </span>
+  <span class="grp cnt" id="cnt"></span>
+</div>
+<div class="tagbar" id="tagbar"></div>
+
+<div id="zoom">
+  <div class="sheet">
+    <div class="head">
+      <div class="c-date">日付</div>
+      <div class="c-title">タイトル</div>
+      <div class="c-org">整理</div>
+      <div class="c-raw">言語化（原文）</div>
+    </div>
+    <div class="rows clamp" id="rows"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   データ。新しいものを配列の先頭に足していく。
+   org は **太字** / ==マーカー== / 見出し行は # / 箇条書きは ・ が使える。
+   raw は喋った原文そのまま。1文字も削らない。
+   ============================================================ */
+var LOG = [
+{
+  d:"2026-07-31",
+  t:"Notionでは俯瞰できない。だから自分で作る",
+  tag:["システム"],
+  org:"# 要約\nNotionのデータベースはテキスト列に装飾が入らない。ノーマルテーブルなら装飾は入るが表として使えない。どちらにしても、Notionは俯瞰できない設計になっている。それが許せないので自作に切り替える。\n\n# 言っていること\n・自作のノートアプリに全部溜めていく\n・Notionで作るとしたらノーマルのテーブルであって、データベースではない\n・データベースのテキストだと装飾ができない。太文字にもできない\n・NotionはiPhoneで見づらい\n\n# 出ている答え\n・==とにかく俯瞰して見たい==\n・iPhoneでもPCと同じように見たい\n・ズームイン・ズームアウトできるようにする\n・カード形式にしても余白はあまりつけない。**繋がってる感**を出す\n\n# 次の一手\nまず作ってみる。",
+  raw:"そっか。Notionのデータベースだと、それが表になっていかないんだな。だからやっぱりいいわ。自作で作ったノートアプリに全部溜めていこう。そのほうがいいと思う。\n俺が思ってんのは、Notionのほうで作るとしたらノーマルのテーブルなんだよ。データベースじゃない。データベースだったら、結局テキストでやっていけばなんとか表現できるかもしれないけど、テキストだと整理されないじゃん。あ、されるのか。でも装飾とかできないよね。太文字とかにもできないじゃん。\nここでやってみる？ でもNotionだと、iPhoneとかで見づらいんだよな。どうすればいい？\n\niPhoneとかで見たときも、PCと同じような感じで見たい。俯瞰して見たいから、ズームイン・ズームアウトできるような感じにしてほしい。とにかく俯瞰して見たいんだ。\nNotionとかだと俯瞰できないからさ、そういう設計になってんじゃん。あれが俺、許せないから。\nあと、カード形式にするにしても、余白はあんまつけないでほしい。ちゃんと繋がってる感は出したいから。\nだからそれだけ守って、ちょっと作ってみて。"
+}
+];
+
+/* ---------- 描画 ---------- */
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function md(s){
+  return esc(s).split('\n').map(function(l){
+    if(l.indexOf('# ')===0) return '<span class="h">'+ln(l.slice(2))+'</span>';
+    if(l.indexOf('・')===0)  return '<span class="li">'+ln(l)+'</span>';
+    return ln(l)+'<br>';
+  }).join('');
+}
+function ln(l){
+  return l.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+          .replace(/==(.+?)==/g,'<mark>$1</mark>');
+}
+
+var active = null;
+function draw(){
+  var list = active ? LOG.filter(function(e){return (e.tag||[]).indexOf(active)>=0;}) : LOG;
+  var h = list.map(function(e,i){
+    var tg = (e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
+    return '<div class="row" onclick="this.classList.toggle(\'open\')">'
+      + '<div class="c-date">'+esc(e.d)+'</div>'
+      + '<div class="c-title">'+esc(e.t)+'<div class="tags">'+tg+'</div></div>'
+      + '<div class="c-org">'+md(e.org)+'</div>'
+      + '<div class="c-raw">'+md(e.raw)+'</div></div>';
+  }).join('');
+  document.getElementById('rows').innerHTML = h || '<div class="empty">まだ何もない</div>';
+  document.getElementById('cnt').textContent = list.length + ' 件';
+}
+
+/* ---------- タグ ---------- */
+function tags(){
+  var s=[]; LOG.forEach(function(e){(e.tag||[]).forEach(function(x){if(s.indexOf(x)<0)s.push(x);});});
+  document.getElementById('tagbar').innerHTML =
+    '<button class="on" onclick="pick(null,this)">全部</button>'
+    + s.map(function(x){return '<button onclick="pick(\''+x+'\',this)">'+esc(x)+'</button>';}).join('');
+}
+function pick(x,b){
+  active=x; draw();
+  var bs=document.getElementById('tagbar').getElementsByTagName('button');
+  for(var i=0;i<bs.length;i++) bs[i].className='';
+  b.className='on';
+}
+
+/* ---------- ズーム（全部emで組んであるので font-size 1本で拡大縮小する） ---------- */
+var fs = 16;
+function apply(){ document.getElementById('zoom').style.fontSize = fs+'px';
+                  try{localStorage.setItem('log_fs',fs);}catch(e){} }
+function Z(d){ fs = Math.max(5, Math.min(30, fs + (d>0 ? (fs<12?1:2) : (fs<=12?-1:-2)))); apply(); }
+function Zfit(){ fs = Math.max(5, Math.min(20, (window.innerWidth - 4) / 62)); apply(); }
+
+/* ---------- 本文の刈り込み ---------- */
+function Clamp(){
+  var r=document.getElementById('rows'), b=document.getElementById('bClamp');
+  if(r.classList.contains('clamp')){ r.classList.remove('clamp'); b.textContent='たたむ解除中'; b.className='on'; }
+  else { r.classList.add('clamp'); b.textContent='たたむ'; b.className=''; }
+}
+
+tags(); draw();
+var saved=null; try{saved=localStorage.getItem('log_fs');}catch(e){}
+if(saved){ fs=parseFloat(saved); apply(); } else { Zfit(); }
+</script>
+</body>
+</html>
