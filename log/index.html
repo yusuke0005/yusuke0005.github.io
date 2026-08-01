@@ -10,53 +10,48 @@
      infinite animation なし / backdrop-filter なし
      filter:drop-shadow なし / 大きな blur 影なし
      requestAnimationFrame ループなし / 外部CDNなし
+     固定表示は flex の3段組（上バー / 流れる本体 / 下入力）で作る
      ============================================================ -->
 <style>
   *{box-sizing:border-box;-webkit-text-size-adjust:none}
-  html,body{margin:0;padding:0;background:#f4f4f2;color:#16150f}
-  body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif}
+  html,body{margin:0;padding:0;height:100%;background:#f4f4f2;color:#16150f}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+       display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
 
-  /* ---- 入力 ---- */
-  .in{background:#16150f;padding:8px}
-  .in textarea{width:100%;height:104px;font:16px/1.6 inherit;color:#f4f4f2;background:#26251b;
-               border:1px solid #3a382c;border-radius:4px;padding:8px;resize:vertical;-webkit-appearance:none}
-  .in textarea::placeholder{color:#6b6957}
-  .go{margin-top:6px}
-  .go button{font:inherit;font-size:15px;font-weight:600;background:#c8a03c;color:#16150f;border:0;border-radius:4px;
-             padding:9px 22px;cursor:pointer;-webkit-appearance:none}
-  .go button:disabled{background:#4a4838;color:#8a8775}
-  .go .st{color:#c8a03c;font-size:13px;margin-left:10px}
-  .in details{margin-top:6px;color:#8a8775;font-size:12px}
-  .in details input{font:inherit;font-size:13px;background:#26251b;color:#e8e6dc;border:1px solid #3a382c;
-                    border-radius:3px;padding:5px 7px;margin:4px 6px 0 0;-webkit-appearance:none}
-  .in details input.k{width:min(100%,340px)}
-  .in details button{font:inherit;font-size:12px;background:#3a382c;color:#e8e6dc;border:0;border-radius:3px;
-                     padding:5px 10px;margin:4px 4px 0 0;cursor:pointer;-webkit-appearance:none}
-  .prev{margin-top:6px;background:#0e0d08;color:#cfcdbd;border:1px solid #3a382c;border-radius:4px;
-        padding:8px;font-size:12.5px;line-height:1.6;white-space:pre-wrap;max-height:230px;overflow:auto}
-
-  /* ---- 操作バー ---- */
-  .bar{background:#26251b;color:#f4f4f2;padding:7px 8px;font-size:13px;line-height:1.4}
-  .bar .grp{display:inline-block;margin-right:14px;white-space:nowrap}
-  .bar b{font-weight:600;opacity:.55;margin-right:5px;font-size:11px;letter-spacing:.04em}
+  /* ---- 上：ずっと出しっぱなし ---- */
+  .top{flex:0 0 auto;background:#26251b;color:#f4f4f2}
+  .bar{padding:6px 8px;font-size:13px;line-height:1.5}
+  .bar .grp{display:inline-block;margin-right:12px;white-space:nowrap}
+  .bar b{font-weight:600;opacity:.5;margin-right:5px;font-size:11px;letter-spacing:.04em}
   .bar button{font:inherit;font-size:13px;background:#3a382c;color:#f4f4f2;border:0;border-radius:3px;
               padding:4px 10px;margin-right:3px;cursor:pointer;-webkit-appearance:none}
   .bar button.on{background:#c8a03c;color:#16150f}
-  .bar .cnt{opacity:.55;font-size:12px}
-  .tagbar{background:#313023;padding:6px 8px}
+  .bar .cnt{opacity:.5;font-size:12px}
+  .tagbar{background:#313023;padding:5px 8px}
   .tagbar button{font-size:12px;padding:3px 8px;margin:2px 3px 2px 0;background:#3a382c;color:#e8e6dc;
                  border:0;border-radius:11px;cursor:pointer;-webkit-appearance:none}
   .tagbar button.on{background:#c8a03c;color:#16150f}
+  .cfg{background:#313023;padding:0 8px 6px;color:#8a8775;font-size:12px}
+  .cfg input{font:inherit;font-size:13px;background:#26251b;color:#e8e6dc;border:1px solid #3a382c;
+             border-radius:3px;padding:5px 7px;margin:4px 6px 0 0;-webkit-appearance:none}
+  .cfg input.k{width:min(100%,320px)}
+  .cfg button{font:inherit;font-size:12px;background:#3a382c;color:#e8e6dc;border:0;border-radius:3px;
+              padding:5px 10px;margin:4px 4px 0 0;cursor:pointer;-webkit-appearance:none}
+  .cfg summary{cursor:pointer;padding:5px 0}
+
+  /* ---- 中：ここだけスクロールする。下が最新 ---- */
+  .feed{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 
   /* ---- 表。font-size 1本で全部が比例して拡大縮小する ---- */
-  #zoom{font-size:16px}
-  .sheet{width:62em;margin:0 auto;padding:.6em 0 4em}
+  #zoom,#zhead{font-size:16px}
+  .sheet{width:62em;margin:0 auto;padding:0 0 1.2em}
   @media (max-width:640px){ .sheet{margin:0} }
-  .head{display:flex;background:#e2e0d6;border:1px solid #b9b6a5;border-bottom:0;
-        font-size:.68em;letter-spacing:.08em;color:#5c5a48;font-weight:600}
-  .head div{padding:.45em .6em;border-right:1px solid #cbc8b8}
+  .head{display:flex;background:#e2e0d6;border-bottom:1px solid #b9b6a5;
+        font-size:.68em;letter-spacing:.08em;color:#5c5a48;font-weight:600;width:62em;margin:0 auto}
+  @media (max-width:640px){ .head{margin:0} }
+  .head div{padding:.4em .6em;border-right:1px solid #cbc8b8}
   .head div:last-child{border-right:0}
-  .rows{border:1px solid #b9b6a5;background:#fff}
+  .rows{border-bottom:1px solid #b9b6a5;background:#fff}
   .row{display:flex;border-bottom:1px solid #ddd9c9;cursor:pointer}
   .row:last-child{border-bottom:0}
   .row:nth-child(even){background:#fbfaf6}
@@ -76,57 +71,87 @@
   .tags{margin-top:.4em}
   .tags span{display:inline-block;font-size:.85em;background:#eceadd;color:#6b6957;
              border-radius:2px;padding:0 .35em;margin:0 .25em .2em 0}
-  .del{float:right;font-size:.8em;color:#c0392b;opacity:.35;padding:0 .2em}
+  .cp{float:right;font:inherit;font-size:.8em;line-height:1.2;color:#7d7b6a;background:#f0eee4;
+      border:1px solid #ddd9c9;border-radius:2px;padding:0 .35em;margin:0 0 .2em .3em;
+      cursor:pointer;-webkit-appearance:none}
+  .cp.ok{background:#c8a03c;color:#16150f;border-color:#c8a03c}
+  .cpt{float:none;display:inline-block;margin:0 0 .2em 0}
+  .del{float:right;font-size:.8em;color:#c0392b;opacity:.3;padding:0 .2em;margin-left:.3em}
   .empty{padding:2em .8em;color:#8a8775;font-size:.85em;text-align:center;background:#fff}
+
+  /* ---- 下：入力。ここも出しっぱなし ---- */
+  .in{flex:0 0 auto;background:#16150f;padding:7px 8px 8px;border-top:1px solid #3a382c}
+  .prev{margin-bottom:6px;background:#0e0d08;color:#cfcdbd;border:1px solid #3a382c;border-radius:4px;
+        padding:7px;font-size:12.5px;line-height:1.55;white-space:pre-wrap;max-height:26vh;overflow:auto}
+  .inrow{display:flex;align-items:flex-end;gap:6px}
+  .in textarea{flex:1 1 auto;height:64px;font:16px/1.55 inherit;color:#f4f4f2;background:#26251b;
+               border:1px solid #3a382c;border-radius:6px;padding:8px;resize:vertical;-webkit-appearance:none}
+  .in textarea::placeholder{color:#6b6957}
+  .in .send{flex:0 0 auto;font:inherit;font-size:15px;font-weight:600;background:#c8a03c;color:#16150f;
+            border:0;border-radius:6px;padding:11px 18px;cursor:pointer;-webkit-appearance:none}
+  .in .send:disabled{background:#4a4838;color:#8a8775}
+  .st{display:block;color:#c8a03c;font-size:12px;margin-top:4px;min-height:1em}
 </style>
 </head>
 <body>
 
-<div class="in">
-  <textarea id="src" placeholder="ここに喋る。音声入力でそのまま流し込んでいい。話題が何個混ざっててもいい。"></textarea>
-  <div class="go">
-    <button id="btn" onclick="run()">整理</button>
-    <span class="st" id="st"></span>
+<!-- ============ 上：固定 ============ -->
+<div class="top">
+  <div class="bar">
+    <span class="grp"><b>ZOOM</b>
+      <button onclick="Z(-1)">−</button><button onclick="Z(1)">＋</button><button onclick="Zfit()">全体</button>
+    </span>
+    <span class="grp"><b>本文</b><button id="bClamp" onclick="Clamp()">たたむ</button></span>
+    <span class="grp"><button onclick="toBottom()">最新へ</button></span>
+    <span class="grp cnt" id="cnt"></span>
   </div>
-  <details id="cfg">
-    <summary>設定 / 書き出し</summary>
-    <div>
-      <input class="k" id="key" type="password" placeholder="APIキー（この端末にだけ保存される）">
-      <input id="mdl" placeholder="モデル">
-      <button onclick="saveCfg()">保存</button>
-      <button onclick="models()">使えるモデル</button>
-      <button onclick="test()">テスト</button>
-      <button onclick="dump()">全部をJSONでコピー</button>
-      <span id="cst"></span>
-    </div>
-  </details>
-  <div class="prev" id="prev" style="display:none"></div>
-</div>
-
-<div class="bar">
-  <span class="grp"><b>ZOOM</b>
-    <button onclick="Z(-1)">−</button><button onclick="Z(1)">＋</button><button onclick="Zfit()">全体</button>
-  </span>
-  <span class="grp"><b>本文</b><button id="bClamp" onclick="Clamp()">たたむ</button></span>
-  <span class="grp cnt" id="cnt"></span>
-</div>
-<div class="tagbar" id="tagbar"></div>
-
-<div id="zoom">
-  <div class="sheet">
+  <div class="tagbar" id="tagbar"></div>
+  <div class="cfg">
+    <details id="cfg">
+      <summary>設定 / 書き出し</summary>
+      <div>
+        <input class="k" id="key" type="password" placeholder="APIキー（この端末にだけ保存される）">
+        <input id="mdl" placeholder="モデル">
+        <button onclick="saveCfg()">保存</button>
+        <button onclick="models()">使えるモデル</button>
+        <button onclick="test()">テスト</button>
+        <button onclick="dump()">全部をJSONでコピー</button>
+        <span id="cst"></span>
+      </div>
+    </details>
+  </div>
+  <div id="zhead">
     <div class="head">
       <div class="c-date">日付</div><div class="c-title">タイトル</div>
       <div class="c-org">整理</div><div class="c-raw">言語化（原文）</div>
     </div>
-    <div class="rows clamp" id="rows"></div>
   </div>
+</div>
+
+<!-- ============ 中：流れる。下が最新 ============ -->
+<div class="feed" id="feed">
+  <div id="zoom">
+    <div class="sheet">
+      <div class="rows clamp" id="rows"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 下：固定 ============ -->
+<div class="in">
+  <div class="prev" id="prev" style="display:none"></div>
+  <div class="inrow">
+    <textarea id="src" placeholder="ここに喋る。音声入力でそのまま流し込んでいい。話題が何個混ざっててもいい。"></textarea>
+    <button class="send" id="btn" onclick="run()">整理</button>
+  </div>
+  <span class="st" id="st"></span>
 </div>
 
 <script>
 /* ============ 焼き込みデータ（PCでもiPhoneでも必ず見えるぶん） ============ */
 var SEED = [
 { id:"s1", d:"2026-07-31", t:"Notionでは俯瞰できない。だから自分で作る", tag:["システム"],
-  org:"# 要約\nNotionのデータベースはテキスト列に装飾が入らない。ノーマルテーブルなら装飾は入るが表として使えない。どちらにしてもNotionは俯瞰できない設計になっている。それが許せないので自作に切り替える。\n\n# 出ている答え\n・==とにかく俯瞰して見たい==\n・iPhoneでもPCと同じように見たい\n・ズームイン・ズームアウトできるようにする\n・カード形式にしても余白はあまりつけない。**繋がってる感**を出す",
+  org:"**Notionでは俯瞰できないから、自作に切り替える。**\n\nNotionのデータベースはテキスト列に装飾が入らない。ノーマルテーブルなら装飾は入るが表として使えない。どちらにしてもNotionは俯瞰できない設計になっている。\n\n# 譲れない条件\n・==とにかく俯瞰して見たい==\n・iPhoneでもPCと同じように見たい\n・ズームイン・ズームアウトできるようにする\n・カード形式にしても余白はあまりつけない。**繋がってる感**を出す",
   raw:"そっか。Notionのデータベースだと、それが表になっていかないんだな。だからやっぱりいいわ。自作で作ったノートアプリに全部溜めていこう。\niPhoneとかで見たときも、PCと同じような感じで見たい。俯瞰して見たいから、ズームイン・ズームアウトできるような感じにしてほしい。とにかく俯瞰して見たいんだ。Notionとかだと俯瞰できないからさ、そういう設計になってんじゃん。あれが俺、許せないから。\nあと、カード形式にするにしても、余白はあんまつけないでほしい。ちゃんと繋がってる感は出したいから。" }
 ];
 
@@ -161,7 +186,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v4';
+var BUILD='v5';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -234,6 +259,44 @@ function run(){
   go(m);
 }
 
+function done(acc,text,t0){
+  var got=parse(acc,text);
+  if(!got.length){ st('形式が読めなかった。プレビューを見て'); document.getElementById('btn').disabled=false; return; }
+  var cur=load();
+  for(var i=got.length-1;i>=0;i--) cur.unshift(got[i]);   /* 保存は新しい順のまま */
+  save(cur); draw(); tags(); toBottom();
+  document.getElementById('src').value='';
+  document.getElementById('prev').style.display='none';
+  document.getElementById('btn').disabled=false;
+  st(got.length+'件 / '+((Date.now()-t0)/1000).toFixed(1)+'秒');
+}
+
+function parse(a,text){
+  var blocks=a.split('###T###').slice(1), out=[], marks=[];
+  var today=new Date(), d=today.getFullYear()+'-'+p2(today.getMonth()+1)+'-'+p2(today.getDate());
+  blocks.forEach(function(b){
+    var t=(b.split('###G###')[0]||'').trim();
+    var g=((b.split('###G###')[1]||'').split('###F###')[0]||'').trim();
+    var f=((b.split('###F###')[1]||'').split('###O###')[0]||'').trim();
+    var o=((b.split('###O###')[1]||'').split('###E###')[0]||'').trim();
+    if(!t&&!o) return;
+    out.push({id:'e'+Date.now()+Math.random().toString(36).slice(2,6),d:d,t:t,
+              tag:g?g.split(/[,、]/).map(function(x){return x.trim();}).filter(Boolean):[],org:o,raw:''});
+    marks.push(f);
+  });
+  /* 原文を話題ごとに切り分ける（モデルに原文を書き写させると遅いので、こちらで切る） */
+  var idx=marks.map(function(m,i){ if(i===0) return 0; var p=m?text.indexOf(m.slice(0,10)):-1; return p<0?-1:p; });
+  for(var i=0;i<out.length;i++){
+    var s=idx[i]<0?null:idx[i], e=null;
+    for(var j=i+1;j<idx.length;j++){ if(idx[j]>=0){e=idx[j];break;} }
+    out[i].raw = (s===null) ? '' : text.slice(s, e===null?undefined:e).trim();
+  }
+  if(out.length===1||out.every(function(x){return !x.raw;})) out[0].raw=text;
+  return out;
+}
+function p2(n){return n<10?'0'+n:''+n;}
+function st(s){document.getElementById('st').textContent=s;}
+
 /* 短い文で往復だけ試す（どのモードが通るか調べる） */
 function test(){
   var key=LS(KEY.k), mdl=LS(KEY.m)||defMdl(), c=document.getElementById('cst'), out='';
@@ -269,45 +332,6 @@ function models(){
     .catch(function(e){ c.textContent=' 取得失敗: '+e.message; });
 }
 
-function done(acc,text,t0){
-  var got=parse(acc,text);
-  if(!got.length){ st('形式が読めなかった。プレビューを見て'); document.getElementById('btn').disabled=false; return; }
-  var cur=load();
-  document.getElementById('rows');
-  for(var i=got.length-1;i>=0;i--) cur.unshift(got[i]);
-  save(cur); draw(); tags();
-  document.getElementById('src').value='';
-  document.getElementById('prev').style.display='none';
-  document.getElementById('btn').disabled=false;
-  st(got.length+'件 / '+((Date.now()-t0)/1000).toFixed(1)+'秒');
-}
-
-function parse(a,text){
-  var blocks=a.split('###T###').slice(1), out=[], marks=[];
-  var today=new Date(), d=today.getFullYear()+'-'+p2(today.getMonth()+1)+'-'+p2(today.getDate());
-  blocks.forEach(function(b){
-    var t=(b.split('###G###')[0]||'').trim();
-    var g=((b.split('###G###')[1]||'').split('###F###')[0]||'').trim();
-    var f=((b.split('###F###')[1]||'').split('###O###')[0]||'').trim();
-    var o=((b.split('###O###')[1]||'').split('###E###')[0]||'').trim();
-    if(!t&&!o) return;
-    out.push({id:'e'+Date.now()+Math.random().toString(36).slice(2,6),d:d,t:t,
-              tag:g?g.split(/[,、]/).map(function(x){return x.trim();}).filter(Boolean):[],org:o,raw:''});
-    marks.push(f);
-  });
-  /* 原文を話題ごとに切り分ける（モデルに原文を書き写させると遅いので、こちらで切る） */
-  var idx=marks.map(function(m,i){ if(i===0) return 0; var p=m?text.indexOf(m.slice(0,10)):-1; return p<0?-1:p; });
-  for(var i=0;i<out.length;i++){
-    var s=idx[i]<0?null:idx[i], e=null;
-    for(var j=i+1;j<idx.length;j++){ if(idx[j]>=0){e=idx[j];break;} }
-    out[i].raw = (s===null) ? '' : text.slice(s, e===null?undefined:e).trim();
-  }
-  if(out.length===1||out.every(function(x){return !x.raw;})) out[0].raw=text;
-  return out;
-}
-function p2(n){return n<10?'0'+n:''+n;}
-function st(s){document.getElementById('st').textContent=s;}
-
 /* ============ 保存 ============ */
 function load(){ try{ return JSON.parse(LS(KEY.e)||'[]'); }catch(e){ return []; } }
 function save(a){ LS(KEY.e,JSON.stringify(a)); }
@@ -324,14 +348,31 @@ function saveCfg(){
   document.getElementById('cst').textContent=' 保存した（'+(isAnth(LS(KEY.k))?'Claude':'Gemini')+'）';
 }
 function dump(){
-  var s=JSON.stringify(load(),null,1);
-  var ta=document.createElement('textarea'); ta.value=s; document.body.appendChild(ta);
-  ta.select(); try{document.execCommand('copy');}catch(e){}
-  document.body.removeChild(ta);
+  copy(JSON.stringify(load(),null,1));
   document.getElementById('cst').textContent=' コピーした（'+load().length+'件）';
 }
 
-/* ============ 描画 ============ */
+/* ============ コピー ============ */
+function copy(s){
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(s); return true; } }catch(e){}
+  var ta=document.createElement('textarea'); ta.value=s;
+  ta.style.position='absolute'; ta.style.left='-9999px';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta); return true;
+}
+function cp(ev,id,f){
+  ev.stopPropagation();
+  var e=null, L=all();
+  for(var i=0;i<L.length;i++) if(L[i].id===id){ e=L[i]; break; }
+  if(!e) return;
+  var s = f==='t'? e.t : f==='org'? e.org : f==='raw'? e.raw : (e.tag||[]).join(', ');
+  copy(s);
+  var b=ev.target; var old=b.textContent; b.textContent='済'; b.className='cp ok'+(f==='g'?' cpt':'');
+  setTimeout(function(){ b.textContent=old; b.className='cp'+(f==='g'?' cpt':''); },900);
+}
+
+/* ============ 描画（古い順。いちばん下が最新） ============ */
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function ln(l){return l.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/==(.+?)==/g,'<mark>$1</mark>');}
 function md(s){ return esc(s).split('\n').map(function(l){
@@ -342,12 +383,16 @@ function md(s){ return esc(s).split('\n').map(function(l){
 var active=null;
 function draw(){
   var L=all(), list=active?L.filter(function(e){return (e.tag||[]).indexOf(active)>=0;}):L;
+  list=list.slice().reverse();   /* 古い順にして、いちばん下を最新にする */
   document.getElementById('rows').innerHTML = list.map(function(e){
     var tg=(e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
+    var B=function(f){ return '<button class="cp'+(f==='g'?' cpt':'')+'" onclick="cp(event,\''+e.id+'\',\''+f+'\')">⧉</button>'; };
     return '<div class="row" onclick="this.classList.toggle(\'open\')">'
       +'<div class="c-date">'+esc(e.d)+'</div>'
-      +'<div class="c-title"><span class="del" onclick="del(\''+e.id+'\',event)">✕</span>'+esc(e.t)+'<div class="tags">'+tg+'</div></div>'
-      +'<div class="c-org">'+md(e.org)+'</div><div class="c-raw">'+md(e.raw)+'</div></div>';
+      +'<div class="c-title"><span class="del" onclick="del(\''+e.id+'\',event)">✕</span>'+B('t')+esc(e.t)
+        +'<div class="tags">'+tg+B('g')+'</div></div>'
+      +'<div class="c-org">'+B('org')+md(e.org)+'</div>'
+      +'<div class="c-raw">'+B('raw')+md(e.raw)+'</div></div>';
   }).join('') || '<div class="empty">まだ何もない</div>';
   document.getElementById('cnt').textContent=list.length+' 件';
 }
@@ -356,13 +401,15 @@ function tags(){
   document.getElementById('tagbar').innerHTML='<button class="on" onclick="pick(null,this)">全部</button>'
     +s.map(function(x){return '<button onclick="pick(\''+x+'\',this)">'+esc(x)+'</button>';}).join('');
 }
-function pick(x,b){ active=x; draw();
+function pick(x,b){ active=x; draw(); toBottom();
   var bs=document.getElementById('tagbar').getElementsByTagName('button');
   for(var i=0;i<bs.length;i++) bs[i].className=''; b.className='on'; }
+function toBottom(){ var f=document.getElementById('feed'); f.scrollTop=f.scrollHeight; }
 
 /* ============ ズーム ============ */
 var fs=16;
-function apply(){ document.getElementById('zoom').style.fontSize=fs+'px'; LS(KEY.f,fs); }
+function apply(){ document.getElementById('zoom').style.fontSize=fs+'px';
+                  document.getElementById('zhead').style.fontSize=fs+'px'; LS(KEY.f,fs); }
 function Z(d){ fs=Math.max(5,Math.min(30,fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2)))); apply(); }
 function Zfit(){ fs=Math.max(5,Math.min(20,(window.innerWidth-4)/62)); apply(); }
 function Clamp(){ var r=document.getElementById('rows'),b=document.getElementById('bClamp');
@@ -374,6 +421,10 @@ document.getElementById('mdl').value=LS(KEY.m)||defMdl();
 if(LS(KEY.k)) document.getElementById('key').placeholder='APIキー保存済み（変えるときだけ入力）';
 tags(); draw();
 var sv=LS(KEY.f); if(sv){ fs=parseFloat(sv); apply(); } else Zfit();
+toBottom();
+document.getElementById('src').addEventListener('keydown',function(ev){
+  if((ev.metaKey||ev.ctrlKey)&&ev.key==='Enter') run();
+});
 </script>
 </body>
 </html>
