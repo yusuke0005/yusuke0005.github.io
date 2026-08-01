@@ -55,10 +55,10 @@
 
   /* ---- 表。font-size 1本で全部が比例して拡大縮小する ---- */
   #zoom,#zhead{font-size:16px}
-  .sheet{width:62em;margin:0 auto;padding:0 0 1.2em}
+  .sheet{width:63.4em;margin:0 auto;padding:0 0 1.2em}
   @media (max-width:640px){ .sheet{margin:0} }
   .head{display:flex;background:#e2e0d6;border-bottom:1px solid #b9b6a5;
-        font-size:.68em;letter-spacing:.08em;color:#5c5a48;font-weight:600;width:62em;margin:0 auto}
+        font-size:.68em;letter-spacing:.08em;color:#5c5a48;font-weight:600;width:63.4em;margin:0 auto}
   @media (max-width:640px){ .head{margin:0} }
   .head div{padding:.4em .6em;border-right:1px solid #cbc8b8}
   .head div:last-child{border-right:0}
@@ -69,6 +69,21 @@
   .row.open{background:#fffdf2}
   .row>div{padding:.5em .6em;border-right:1px solid #ececdf;overflow:hidden;min-width:0}
   .row>div:last-child{border-right:0}
+  /* ---- 左端の色帯。次に何をやるか＝読んだ印。無色＝まだ読んでない ---- */
+  .c-flag{width:1.4em;flex:0 0 1.4em;padding:0;background:#fff;cursor:pointer}
+  .head .c-flag{background:transparent}
+  .f-b{background:#3b7dd8}   /* 青＝AIと壁打ちしたい */
+  .f-r{background:#d0342c}   /* 赤＝もう一回読み返したい */
+  .f-g{background:#4a9d5f}   /* 緑＝手をつけた・済み */
+  .f-x{background:#b9b6a5}   /* 灰＝要らない */
+  .row.dim{opacity:.42}
+  /* 色を選ぶとき。行が短くても外へはみ出して出る */
+  .c-flag.pk{overflow:visible;position:relative;z-index:5;background:#fff}
+  .c-flag .sw{display:block;width:7.2em;height:1.9em;line-height:1.9em;border-bottom:1px solid #fff;
+              font-size:.62em;color:#fff;padding-left:.5em;white-space:nowrap;font-weight:600}
+  .c-flag .sw.s0{background:#fff;color:#8a8775;box-shadow:inset 0 0 0 1px #ccc9b8}
+  .c-flag .sw.s1{background:#3b7dd8} .c-flag .sw.s2{background:#d0342c}
+  .c-flag .sw.s3{background:#4a9d5f} .c-flag .sw.s4{background:#b9b6a5}
   .c-date{width:5em;flex:0 0 5em;font-size:.72em;color:#8a8775;line-height:1.5;padding-top:.75em}
   .c-title{width:12em;flex:0 0 12em;font-size:.8em;font-weight:600;line-height:1.45}
   .c-org{width:24em;flex:0 0 24em;font-size:.78em;line-height:1.62}
@@ -125,6 +140,8 @@
   <div class="panel">
     <h4>タグ</h4>
     <div class="tg" id="tagbar"></div>
+    <h4>色</h4>
+    <div class="tg" id="colbar"></div>
     <h4>設定</h4>
     <input id="key" type="password" placeholder="APIキー">
     <input id="mdl" placeholder="モデル">
@@ -148,6 +165,7 @@
     <div id="zoom">
       <div id="zhead">
         <div class="head">
+          <div class="c-flag"></div>
           <div class="c-date">日付</div><div class="c-title">タイトル</div>
           <div class="c-org">整理</div><div class="c-raw">言語化（原文）</div>
         </div>
@@ -209,7 +227,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v10';
+var BUILD='v11';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -287,7 +305,7 @@ function done(acc,text,t0){
   if(!got.length){ st('形式が読めなかった。プレビューを見て'); document.getElementById('btn').disabled=false; return; }
   var cur=load();
   for(var i=got.length-1;i>=0;i--) cur.unshift(got[i]);   /* 保存は新しい順のまま */
-  save(cur); draw(); tags(); toBottom(); pushSoon();
+  save(cur); draw(); tags(); colbar(); toBottom(); pushSoon();
   document.getElementById('src').value='';
   document.getElementById('prev').style.display='none';
   document.getElementById('btn').disabled=false;
@@ -368,7 +386,7 @@ function save(a){ MEM=a; persist(); }
 function del(id,ev){ ev.stopPropagation();
   if(DEL.indexOf(id)<0) DEL.push(id);
   MEM=MEM.filter(function(x){return x.id!==id;});
-  persist(); draw(); tags(); pushSoon(); }
+  persist(); draw(); tags(); colbar(); pushSoon(); }
 
 /* ---- 端末内：IndexedDB ---- */
 var IDB=null;
@@ -452,7 +470,7 @@ function sync(quiet,retry){
     var del=rd.concat(DEL.filter(function(x){ return rd.indexOf(x)<0; }));
     var before=JSON.stringify({e:g.data.entries,d:rd});
     var m=mix(MEM,g.data.entries,del);
-    MEM=m; DEL=del; persist(); draw(); tags();
+    MEM=m; DEL=del; persist(); draw(); tags(); colbar();
     if(JSON.stringify({e:MEM,d:DEL})===before){ syst('同期OK '+MEM.length+'件'); SY=false; return; }
     return ghPut({entries:MEM,del:DEL},g.sha).then(function(){
       syst('保存した '+MEM.length+'件'); SY=false;
@@ -520,14 +538,61 @@ function md(s){ return esc(s).split('\n').map(function(l){
   if(l.indexOf('・')===0) return '<span class="li">'+ln(l)+'</span>';
   return ln(l)+'<br>'; }).join(''); }
 
+/* ============ 色 ============
+   色＝次に何をやるか。読んだら必ず何か付ける。だから無色＝まだ読んでない。
+   b:青 AIと壁打ちしたい / r:赤 もう一回読み返したい / g:緑 手をつけた / x:灰 要らない
+   ============================================================ */
+var COL=[{k:'',n:'無色',w:'まだ読んでない'},{k:'b',n:'青',w:'AIと壁打ち'},
+         {k:'r',n:'赤',w:'読み返したい'},{k:'g',n:'緑',w:'手をつけた'},{k:'x',n:'灰',w:'要らない'}];
+var activeC=null;   /* 色での絞り込み。null＝全部 */
+var LASTID=null;    /* PCでキー1〜5を押したときの相手 */
+
+function ent(id){ var L=all(); for(var i=0;i<L.length;i++) if(L[i].id===id) return L[i]; return null; }
+
+/* 色帯をタップ＝5色を出す。もう一回タップで閉じる */
+function palOpen(ev,id){
+  ev.stopPropagation();
+  var cell=ev.currentTarget;
+  var was=cell.classList.contains('pk');
+  palClose();
+  if(was) return;
+  LASTID=id;
+  cell.classList.add('pk'); cell.className='c-flag pk';
+  cell.innerHTML = COL.map(function(c,i){
+    return '<span class="sw s'+i+'" onclick="setC(event,\''+id+'\',\''+c.k+'\')">'+c.w+'</span>'; }).join('');
+}
+/* よそを触ったら閉じる（palOpen と setC は伝播を止めてるのでここには来ない） */
+document.addEventListener('click',function(){ palClose(); });
+function palClose(){
+  var ps=document.getElementById('rows').getElementsByClassName('pk');
+  while(ps.length){ var p=ps[0]; var id=p.getAttribute('data-id');
+    p.innerHTML=''; p.className='c-flag'+(colOf(id)?' f-'+colOf(id):''); }
+}
+function colOf(id){ var e=ent(id); return (e&&e.c)||''; }
+
+function setC(ev,id,c){
+  if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return;
+  e.c=c; persist(); pushSoon(); colbar();
+  var cell=document.querySelector('.c-flag[data-id="'+id+'"]');
+  if(cell){ cell.innerHTML=''; cell.className='c-flag'+(c?' f-'+c:'');
+    var row=cell.parentNode;
+    row.className='row'+(row.classList.contains('open')?' open':'')+(c==='x'?' dim':''); }
+  if(activeC!==null) draw();   /* 色で絞ってる最中は並びが変わるので描き直す */
+}
+
 var active=null;
 function draw(){
-  var L=all(), list=active?L.filter(function(e){return (e.tag||[]).indexOf(active)>=0;}):L;
+  var L=all();
+  var list=active?L.filter(function(e){return (e.tag||[]).indexOf(active)>=0;}):L;
+  if(activeC!==null) list=list.filter(function(e){ return (e.c||'')===activeC; });
   list=list.slice().reverse();   /* 古い順にして、いちばん下を最新にする */
   document.getElementById('rows').innerHTML = list.map(function(e){
     var tg=(e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
+    var c=e.c||'';
     var B=function(f){ return '<button class="cp'+(f==='g'?' cpt':'')+'" onclick="cp(event,\''+e.id+'\',\''+f+'\')">⧉</button>'; };
-    return '<div class="row" onclick="this.classList.toggle(\'open\')">'
+    return '<div class="row'+(c==='x'?' dim':'')+'" onclick="LASTID=\''+e.id+'\';this.classList.toggle(\'open\')">'
+      +'<div class="c-flag'+(c?' f-'+c:'')+'" data-id="'+e.id+'" onclick="palOpen(event,\''+e.id+'\')"></div>'
       +'<div class="c-date">'+esc(e.d)+'</div>'
       +'<div class="c-title"><span class="del" onclick="del(\''+e.id+'\',event)">✕</span>'+B('t')+esc(e.t)
         +'<div class="tags">'+tg+B('g')+'</div></div>'
@@ -544,6 +609,30 @@ function tags(){
 function pick(x,b){ active=x; draw(); toBottom();
   var bs=document.getElementById('tagbar').getElementsByTagName('button');
   for(var i=0;i<bs.length;i++) bs[i].className=''; b.className='on'; }
+
+/* 色で絞る */
+function colbar(){
+  var L=all(), n={};
+  L.forEach(function(e){ var k=e.c||''; n[k]=(n[k]||0)+1; });
+  var h='<button class="'+(activeC===null?'on':'')+'" onclick="pickC(null,this)">全部</button>';
+  h+=COL.map(function(c){
+    return '<button class="'+(activeC===c.k?'on':'')+'" onclick="pickC(\''+c.k+'\',this)">'
+      +c.n+' '+(n[c.k]||0)+'</button>'; }).join('');
+  document.getElementById('colbar').innerHTML=h;
+}
+function pickC(k,b){ activeC=k; draw(); toBottom();
+  var bs=document.getElementById('colbar').getElementsByTagName('button');
+  for(var i=0;i<bs.length;i++) bs[i].className=''; b.className='on'; }
+
+/* PCのおまけ：最後に触った行に 1〜5 で色を付ける */
+document.addEventListener('keydown',function(ev){
+  if(!LASTID) return;
+  var t=ev.target, tn=t&&t.tagName;
+  if(tn==='TEXTAREA'||tn==='INPUT') return;
+  var i='12345'.indexOf(ev.key);
+  if(i<0) return;
+  ev.preventDefault(); setC(null,LASTID,COL[i].k);
+});
 function toBottom(){ var f=document.getElementById('feed'); f.scrollTop=f.scrollHeight; }
 
 /* ============ ズーム ============ */
@@ -555,7 +644,7 @@ function Zc(v){ return Math.max(ZMIN,Math.min(ZMAX,v)); }
 function Z(d){ zoomAt(fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2))); }
 function Zfit(){ var f=document.getElementById('feed');
   var w=(f&&f.clientWidth)||window.innerWidth;
-  fs=Zc((w-4)/62); apply(); }
+  fs=Zc((w-4)/63.4); apply(); }
 
 /* ---- ピンチで表そのものを拡大縮小する（指の位置を起点にする） ---- */
 function pd(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY;
@@ -669,7 +758,7 @@ document.getElementById('mdl').value=LS(KEY.m)||defMdl();
 if(LS(KEY.k)) document.getElementById('key').placeholder='APIキー保存済み（変えるときだけ入力）';
 document.getElementById('ghr').value=ghR();
 if(ghT()) document.getElementById('ght').placeholder='トークン保存済み（変えるときだけ入力）';
-tags(); draw();
+tags(); colbar(); draw();
 var sv=LS(KEY.f); if(sv){ fs=parseFloat(sv); apply(); } else Zfit();
 toBottom();
 
@@ -679,7 +768,7 @@ idbOpen().then(function(){ return idbGet('entries'); }).then(function(v){
   return idbGet('del');
 }).then(function(d){
   DEL=d||[];
-  persist(); tags(); draw(); toBottom();
+  persist(); tags(); colbar(); draw(); toBottom();
   if(ghOn()) sync(true); else syst('GitHub未設定（この端末にだけ保存中）');
 });
 document.getElementById('src').addEventListener('keydown',function(ev){
