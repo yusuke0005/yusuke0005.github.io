@@ -33,6 +33,10 @@
                border-radius:3px;padding:6px 2px;margin:3px;cursor:pointer;-webkit-appearance:none;
                display:block;width:calc(100% - 6px);text-align:center}
   .rail button.on{background:#c8a03c;color:#16150f}
+  /* 同期の状態。黙って失敗させない */
+  .rail button.wait{background:#8a6f1e;color:#fff}   /* 送信待ち */
+  .rail button.bad{background:#c0392b;color:#fff}    /* 失敗。押せば再送 */
+  .rail button.okk{background:#2f6b3f;color:#fff}    /* 上がった */
   .rail .cnt{font-size:10px;opacity:.5;text-align:center;padding:4px 2px}
   .rail .sp{height:8px}
   .panel{display:none;padding:4px 6px 10px;font-size:12px;color:#8a8775;border-top:1px solid #3a382c;margin-top:6px}
@@ -154,7 +158,7 @@
   <button id="bTr" onclick="trashView()">🗑</button>
   <button id="bClamp" onclick="Clamp()">畳</button>
   <button onclick="toBottom()">↓</button>
-  <button onclick="sync()">⇅</button>
+  <button id="bSy" onclick="sync()">⇅</button>
   <div class="sp"></div>
   <button id="bFull" onclick="Full()">⛶</button>
   <button onclick="reload()">↻</button>
@@ -232,7 +236,7 @@ var SEED = [
 ];
 
 var KEY={k:'log_key',m:'log_mdl',e:'log_entries',f:'log_fs',nt:'log_nothink',
-         gt:'log_gh_token',gr:'log_gh_repo'};
+         gt:'log_gh_token',gr:'log_gh_repo',dr:'log_draft'};
 var DEF_A='claude-sonnet-4-5';      /* Anthropic のとき */
 var DEF_G='gemini-flash-latest';    /* Google のとき */
 function LS(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
@@ -263,7 +267,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v14';
+var BUILD='v15';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -342,7 +346,7 @@ function done(acc,text,t0){
   var cur=load();
   for(var i=got.length-1;i>=0;i--) cur.unshift(got[i]);   /* 保存は新しい順のまま */
   save(cur); draw(); tags(); colbar(); trCnt(); toBottom(); pushSoon();
-  document.getElementById('src').value='';
+  document.getElementById('src').value=''; LS(KEY.dr,'');   /* ここで初めて下書きを捨てる */
   document.getElementById('prev').style.display='none';
   document.getElementById('btn').disabled=false;
   st(got.length+'件 / '+((Date.now()-t0)/1000).toFixed(1)+'秒');
@@ -496,6 +500,23 @@ function mix(a,b,del){
   return out;
 }
 
+/* ============ 同期の状態を見せる ============
+   ''=きれい / wait=まだ上がってない / bad=失敗した（押せば再送） */
+var SST='';
+function sst(s){
+  SST=s;
+  var b=document.getElementById('bSy'); if(!b) return;
+  b.className=s==='wait'?'wait':(s==='bad'?'bad':(s==='ok'?'okk':''));
+  b.textContent=s==='wait'?'⇅未':(s==='bad'?'⇅失敗':'⇅');
+  if(s==='ok') setTimeout(function(){ if(SST==='ok') sst(''); },2500);
+}
+/* 上げ忘れたまま閉じられないように、閉じるときに警告を出す */
+var LEAVE=false;
+window.addEventListener('beforeunload',function(ev){
+  if(LEAVE) return;
+  if(SST==='wait'||SST==='bad'){ ev.preventDefault(); ev.returnValue=''; return ''; }
+});
+
 var SY=false;
 function sync(quiet,retry){
   if(!ghOn()){ if(!quiet){ railOpen(); syst('GitHubの設定がまだ'); } return Promise.resolve(); }
@@ -507,19 +528,28 @@ function sync(quiet,retry){
     var before=JSON.stringify({e:g.data.entries,d:rd});
     var m=mix(MEM,g.data.entries,del);
     MEM=m; DEL=del; persist(); draw(); tags(); colbar(); trCnt();
-    if(JSON.stringify({e:MEM,d:DEL})===before){ syst('同期OK '+MEM.length+'件'); SY=false; return; }
+    if(JSON.stringify({e:MEM,d:DEL})===before){ syst('同期OK '+MEM.length+'件'); SY=false; sst('ok'); return; }
     return ghPut({entries:MEM,del:DEL},g.sha).then(function(){
-      syst('保存した '+MEM.length+'件'); SY=false;
+      syst('保存した '+MEM.length+'件'); SY=false; sst('ok');
     });
   }).catch(function(e){
     SY=false;
     if(e.code===409&&!retry) return sync(quiet,1);   /* 他の端末と衝突したら1回だけやり直す */
-    syst('同期エラー: '+e.message);
+    syst('同期エラー: '+e.message); sst('bad');
     if(!quiet) railOpen();
   });
 }
 var SYT=null;
-function pushSoon(){ if(!ghOn()) return; clearTimeout(SYT); SYT=setTimeout(function(){ sync(true); },1200); }
+function pushSoon(){ if(!ghOn()) return; sst('wait');
+  clearTimeout(SYT); SYT=setTimeout(function(){ sync(true); },1200); }
+
+/* 失敗しても勝手に諦めない。裏に回したとき／戻ってきたとき／電波が戻ったときに送り直す */
+document.addEventListener('visibilitychange',function(){
+  if(SST==='wait'||SST==='bad') sync(true);
+  else if(!document.hidden) sync(true);
+});
+window.addEventListener('online',function(){ sync(true); });
+window.addEventListener('focus',function(){ if(SST==='wait'||SST==='bad') sync(true); });
 
 function saveGh(){
   var t=document.getElementById('ght').value.trim(), r=document.getElementById('ghr').value.trim();
@@ -879,7 +909,7 @@ function Full(){
 
 /* iPhoneのホーム画面から開くとURL欄も更新ボタンも無いので、自前で置く。
    ついでにキャッシュを外して読み直す */
-function reload(){ location.replace(location.pathname+'?t='+Date.now()); }
+function reload(){ LEAVE=true; location.replace(location.pathname+'?t='+Date.now()); }
 
 /* ============ 起動 ============ */
 document.getElementById('mdl').value=LS(KEY.m)||defMdl();
@@ -902,6 +932,22 @@ idbOpen().then(function(){ return idbGet('entries'); }).then(function(v){
 document.getElementById('src').addEventListener('keydown',function(ev){
   if((ev.metaKey||ev.ctrlKey)&&ev.key==='Enter') run();
 });
+
+/* ============ 下書きの自動保存 ============
+   喋った直後にアプリが落ちても消えないように、打った端から端末に置いておく。
+   捨てるのは整理が成功したときだけ。 */
+(function(){
+  var s=document.getElementById('src');
+  var d=LS(KEY.dr);
+  if(d&&!s.value){ s.value=d; st('前回の下書きを戻した'); }
+  var t=null;
+  s.addEventListener('input',function(){
+    clearTimeout(t); t=setTimeout(function(){ LS(KEY.dr,s.value); },300);
+  });
+  /* 閉じる・裏に回る瞬間は待たずに即置く */
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) LS(KEY.dr,s.value); });
+  window.addEventListener('pagehide',function(){ LS(KEY.dr,s.value); });
+})();
 </script>
 </body>
 </html>
