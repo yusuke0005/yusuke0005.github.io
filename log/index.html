@@ -55,10 +55,10 @@
 
   /* ---- 表。font-size 1本で全部が比例して拡大縮小する ---- */
   #zoom,#zhead{font-size:16px}
-  .sheet{width:63.4em;margin:0 auto;padding:0 0 1.2em}
+  .sheet{width:62em;margin:0 auto;padding:0 0 1.2em}
   @media (max-width:640px){ .sheet{margin:0} }
   .head{display:flex;background:#e2e0d6;border-bottom:1px solid #b9b6a5;
-        font-size:.68em;letter-spacing:.08em;color:#5c5a48;font-weight:600;width:63.4em;margin:0 auto}
+        font-size:.68em;letter-spacing:.08em;color:#5c5a48;font-weight:600;width:62em;margin:0 auto}
   @media (max-width:640px){ .head{margin:0} }
   .head div{padding:.4em .6em;border-right:1px solid #cbc8b8}
   .head div:last-child{border-right:0}
@@ -69,21 +69,6 @@
   .row.open{background:#fffdf2}
   .row>div{padding:.5em .6em;border-right:1px solid #ececdf;overflow:hidden;min-width:0}
   .row>div:last-child{border-right:0}
-  /* ---- 左端の色帯。次に何をやるか＝読んだ印。無色＝まだ読んでない ---- */
-  .c-flag{width:1.4em;flex:0 0 1.4em;padding:0;background:#fff;cursor:pointer}
-  .head .c-flag{background:transparent}
-  .f-b{background:#3b7dd8}   /* 青＝AIと壁打ちしたい */
-  .f-r{background:#d0342c}   /* 赤＝もう一回読み返したい */
-  .f-g{background:#4a9d5f}   /* 緑＝手をつけた・済み */
-  .f-x{background:#b9b6a5}   /* 灰＝要らない */
-  .row.dim{opacity:.42}
-  /* 色を選ぶとき。行が短くても外へはみ出して出る */
-  .c-flag.pk{overflow:visible;position:relative;z-index:5;background:#fff}
-  .c-flag .sw{display:block;width:7.2em;height:1.9em;line-height:1.9em;border-bottom:1px solid #fff;
-              font-size:.62em;color:#fff;padding-left:.5em;white-space:nowrap;font-weight:600}
-  .c-flag .sw.s0{background:#fff;color:#8a8775;box-shadow:inset 0 0 0 1px #ccc9b8}
-  .c-flag .sw.s1{background:#3b7dd8} .c-flag .sw.s2{background:#d0342c}
-  .c-flag .sw.s3{background:#4a9d5f} .c-flag .sw.s4{background:#b9b6a5}
   .c-date{width:5em;flex:0 0 5em;font-size:.72em;color:#8a8775;line-height:1.5;padding-top:.75em}
   .c-title{width:12em;flex:0 0 12em;font-size:.8em;font-weight:600;line-height:1.45}
   .c-org{width:24em;flex:0 0 24em;font-size:.78em;line-height:1.62}
@@ -94,6 +79,26 @@
   .c-org mark{background:#ffe9a3;color:inherit;padding:0 .1em}
   .c-org .h{display:block;font-weight:700;margin:.5em 0 .1em;color:#3a382c}
   .c-org .li{display:block;padding-left:1em;text-indent:-1em}
+
+  /* ---- 色＝次に何をやるか。ブロック全体を薄く染める。無色＝まだ読んでない ---- */
+  .row.k-b,.row.k-b:nth-child(even){background:#e4edfb}   /* 青＝AIと壁打ち */
+  .row.k-r,.row.k-r:nth-child(even){background:#fbe6e3}   /* 赤＝読み返したい */
+  .row.k-g,.row.k-g:nth-child(even){background:#e6f2e9}   /* 緑＝手をつけた */
+  .row.k-x,.row.k-x:nth-child(even){background:#efede5;color:#a8a696}  /* 灰＝要らない */
+  .row.k-x .c-org,.row.k-x .c-raw,.row.k-x .c-title{opacity:.55}
+  .row.open{box-shadow:inset .18em 0 0 #c8a03c}
+  /* 色を選ぶ丸ボタン（タイトルの左肩） */
+  .ch{display:inline-block;width:.9em;height:.9em;border-radius:50%;margin:0 .35em 0 0;
+      vertical-align:-.05em;background:#fff;box-shadow:inset 0 0 0 1px #b9b6a5;cursor:pointer}
+  .ch.ch-b{background:#3b7dd8;box-shadow:none} .ch.ch-r{background:#d0342c;box-shadow:none}
+  .ch.ch-g{background:#4a9d5f;box-shadow:none} .ch.ch-x{background:#b9b6a5;box-shadow:none}
+  .c-title.pk{overflow:visible;position:relative;z-index:6}
+  .pal{position:absolute;left:.2em;top:1.6em;width:8em;background:#fff;border:1px solid #b9b6a5;
+       border-radius:.2em;overflow:hidden}
+  .pal .sw{display:block;height:2em;line-height:2em;font-size:.7em;font-weight:600;
+           padding-left:.6em;white-space:nowrap;color:#fff}
+  .pal .sw.s0{background:#fff;color:#8a8775} .pal .sw.s1{background:#3b7dd8}
+  .pal .sw.s2{background:#d0342c} .pal .sw.s3{background:#4a9d5f} .pal .sw.s4{background:#b9b6a5}
   .tags{margin-top:.4em}
   .tags span{display:inline-block;font-size:.85em;background:#eceadd;color:#6b6957;
              border-radius:2px;padding:0 .35em;margin:0 .25em .2em 0}
@@ -165,7 +170,6 @@
     <div id="zoom">
       <div id="zhead">
         <div class="head">
-          <div class="c-flag"></div>
           <div class="c-date">日付</div><div class="c-title">タイトル</div>
           <div class="c-org">整理</div><div class="c-raw">言語化（原文）</div>
         </div>
@@ -227,7 +231,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v11';
+var BUILD='v12';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -549,35 +553,39 @@ var LASTID=null;    /* PCでキー1〜5を押したときの相手 */
 
 function ent(id){ var L=all(); for(var i=0;i<L.length;i++) if(L[i].id===id) return L[i]; return null; }
 
-/* 色帯をタップ＝5色を出す。もう一回タップで閉じる */
+/* タイトルの左肩の丸をタップ＝5色を出す。もう一回タップで閉じる */
 function palOpen(ev,id){
   ev.stopPropagation();
-  var cell=ev.currentTarget;
+  var cell=ev.currentTarget.parentNode;          /* .c-title */
   var was=cell.classList.contains('pk');
   palClose();
   if(was) return;
   LASTID=id;
-  cell.classList.add('pk'); cell.className='c-flag pk';
-  cell.innerHTML = COL.map(function(c,i){
+  cell.classList.add('pk');
+  var box=document.createElement('div');
+  box.className='pal';
+  box.innerHTML = COL.map(function(c,i){
     return '<span class="sw s'+i+'" onclick="setC(event,\''+id+'\',\''+c.k+'\')">'+c.w+'</span>'; }).join('');
+  cell.appendChild(box);
 }
 /* よそを触ったら閉じる（palOpen と setC は伝播を止めてるのでここには来ない） */
 document.addEventListener('click',function(){ palClose(); });
 function palClose(){
   var ps=document.getElementById('rows').getElementsByClassName('pk');
-  while(ps.length){ var p=ps[0]; var id=p.getAttribute('data-id');
-    p.innerHTML=''; p.className='c-flag'+(colOf(id)?' f-'+colOf(id):''); }
+  while(ps.length){ var p=ps[0]; p.classList.remove('pk');
+    var b=p.getElementsByClassName('pal')[0]; if(b) b.parentNode.removeChild(b); }
 }
-function colOf(id){ var e=ent(id); return (e&&e.c)||''; }
 
 function setC(ev,id,c){
   if(ev) ev.stopPropagation();
   var e=ent(id); if(!e) return;
-  e.c=c; persist(); pushSoon(); colbar();
-  var cell=document.querySelector('.c-flag[data-id="'+id+'"]');
-  if(cell){ cell.innerHTML=''; cell.className='c-flag'+(c?' f-'+c:'');
-    var row=cell.parentNode;
-    row.className='row'+(row.classList.contains('open')?' open':'')+(c==='x'?' dim':''); }
+  e.c=c; persist(); pushSoon(); colbar(); palClose();
+  var row=document.querySelector('.row[data-id="'+id+'"]');
+  if(row){
+    row.className='row'+(c?' k-'+c:'')+(row.classList.contains('open')?' open':'');
+    var ch=row.getElementsByClassName('ch')[0];
+    if(ch) ch.className='ch'+(c?' ch-'+c:'');
+  }
   if(activeC!==null) draw();   /* 色で絞ってる最中は並びが変わるので描き直す */
 }
 
@@ -591,10 +599,10 @@ function draw(){
     var tg=(e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
     var c=e.c||'';
     var B=function(f){ return '<button class="cp'+(f==='g'?' cpt':'')+'" onclick="cp(event,\''+e.id+'\',\''+f+'\')">⧉</button>'; };
-    return '<div class="row'+(c==='x'?' dim':'')+'" onclick="LASTID=\''+e.id+'\';this.classList.toggle(\'open\')">'
-      +'<div class="c-flag'+(c?' f-'+c:'')+'" data-id="'+e.id+'" onclick="palOpen(event,\''+e.id+'\')"></div>'
+    return '<div class="row'+(c?' k-'+c:'')+'" data-id="'+e.id+'" onclick="LASTID=\''+e.id+'\';this.classList.toggle(\'open\')">'
       +'<div class="c-date">'+esc(e.d)+'</div>'
-      +'<div class="c-title"><span class="del" onclick="del(\''+e.id+'\',event)">✕</span>'+B('t')+esc(e.t)
+      +'<div class="c-title"><span class="del" onclick="del(\''+e.id+'\',event)">✕</span>'+B('t')
+        +'<span class="ch'+(c?' ch-'+c:'')+'" onclick="palOpen(event,\''+e.id+'\')"></span>'+esc(e.t)
         +'<div class="tags">'+tg+B('g')+'</div></div>'
       +'<div class="c-org">'+B('org')+md(e.org)+'</div>'
       +'<div class="c-raw">'+B('raw')+md(e.raw)+'</div></div>';
@@ -644,7 +652,7 @@ function Zc(v){ return Math.max(ZMIN,Math.min(ZMAX,v)); }
 function Z(d){ zoomAt(fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2))); }
 function Zfit(){ var f=document.getElementById('feed');
   var w=(f&&f.clientWidth)||window.innerWidth;
-  fs=Zc((w-4)/63.4); apply(); }
+  fs=Zc((w-4)/62); apply(); }
 
 /* ---- ピンチで表そのものを拡大縮小する（指の位置を起点にする） ---- */
 function pd(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY;
