@@ -106,6 +106,7 @@
   /* ---- 星＝重要度。色（次に何をやるか）とは別の軸。日付の下に置く ---- */
   /* 5つ確実に入るように、星1つぶんの幅を決め打ちする。
      ★ の実際の字幅はフォント任せなので、幅を指定しないと端末によって5つ目がはみ出て消える。 */
+  .tmx{display:block;color:#6b6957;font-weight:600;letter-spacing:.04em}
   .stx{display:block;margin-top:.3em;white-space:nowrap}
   .stx i{display:inline-block;width:1.02em;font-style:normal;font-size:.88em;line-height:1;
          text-align:center;color:#e2dfd0;cursor:pointer}
@@ -225,7 +226,7 @@
     <div id="zoom">
       <div id="zhead">
         <div class="head">
-          <div class="c-date">日付</div><div class="c-title">タイトル</div>
+          <div class="c-date">日付・時刻</div><div class="c-title">タイトル</div>
           <div class="c-org">整理</div><div class="c-raw">言語化（原文）</div>
         </div>
       </div>
@@ -340,7 +341,7 @@ var PDAY =
 FMT;
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v23';
+var BUILD='v24';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -470,7 +471,7 @@ function parse(a,text){
     var f=cut((b.split('###F###')[1]||''),['###O###','###E###']);
     var o=((b.split('###O###')[1]||'').split('###E###')[0]||'').trim();
     if(!t&&!o) return;
-    out.push({id:'e'+Date.now()+Math.random().toString(36).slice(2,6),d:d,t:t,u:Date.now(),
+    out.push({id:'e'+Date.now()+Math.random().toString(36).slice(2,6),d:d,t:t,u:Date.now(),tm:now2(),
               tag:toTags(g),org:o,raw:''});
     marks.push(f);
   });
@@ -899,7 +900,7 @@ function splitSel(){
   ask(PSPLIT,src,'分割中…',function(acc,t0){
     var got=parse(acc,src);
     if(got.length<2){ st('分けられる境目が無かった'); endAsk(); return; }
-    got.forEach(function(g){ g.d=e.d; g.c=e.c||''; g.u=Date.now(); });
+    got.forEach(function(g){ g.d=e.d; g.c=e.c||''; g.u=Date.now(); g.tm=tmOf(e); });
     trashIds([e.id]);
     for(var i=got.length-1;i>=0;i--) MEM.unshift(got[i]);
     sortMem(); SEL={}; persist(); pushSoon();
@@ -923,6 +924,7 @@ function joinSel(){
     if(!got.length){ st('形式が読めなかった。プレビューを見て'); endAsk(); return; }
     var n=got[0];
     n.d=L[0].d;                              /* 日付はいちばん古いものに合わせる */
+    n.tm=tmOf(L[0]);                         /* 時刻も、いちばん古いものに合わせる */
     n.raw=src; n.u=Date.now();
     n.c=(L.filter(function(e){return e.c;})[0]||{}).c||'';
     var tg=[]; L.forEach(function(e){ (e.tag||[]).forEach(function(x){ if(tg.indexOf(x)<0) tg.push(x); }); });
@@ -1008,6 +1010,18 @@ function dPlus(s,n){
 }
 function today(){ var t=new Date();
   return t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate()); }
+function now2(){ var t=new Date(); return p2(t.getHours())+':'+p2(t.getMinutes()); }
+
+/* 何時に書いたか。日付は線が決めるので、ブロック側で意味を持つのは時刻のほう。
+   古いブロックには tm が無いが、IDの中に作った瞬間のミリ秒が埋まっているのでそこから出す。 */
+function tmOf(e){
+  if(e.tm) return e.tm;
+  var m=String(e.id||'').match(/^[a-z](\d{13})/);
+  if(!m) return '';
+  var t=new Date(+m[1]);
+  if(isNaN(t.getTime())) return '';
+  return p2(t.getHours())+':'+p2(t.getMinutes());
+}
 
 /* ブロックID → 表示する日付。自分より下にある最初の「1日の区切り」の日付を使う */
 function dayMap(list){
@@ -1081,7 +1095,8 @@ function sumSep(ev,id){
     var got=parse(acc,src);
     if(!got.length){ st('形式が読めなかった。プレビューを見て'); endAsk(); return; }
     var n=got[0];
-    n.d=(sp&&sp.d)||L[L.length-1].d; n.raw=''; n.before=id; n.u=Date.now();
+    n.d=(sp&&sp.d)||L[L.length-1].d; n.tm=tmOf(L[L.length-1]);
+    n.raw=''; n.before=id; n.u=Date.now();
     if(n.tag.indexOf('日誌')<0) n.tag.unshift('日誌');
     n.tag=fixTags(n.tag);
     /* 前に作ったまとめが残っていればゴミ箱へ（消さない。上書きもしない） */
@@ -1117,7 +1132,7 @@ function draw(){
     var stx='<span class="stx">'+[1,2,3,4,5].map(function(k){
       return '<i class="'+(k<=sv?'f':'')+'" onclick="setS(event,\''+e.id+'\','+k+')">★</i>'; }).join('')+'</span>';
     return '<div class="row'+(c?' k-'+c:'')+(sl?' sel':'')+'" data-id="'+e.id+'" onclick="rowTap(event,\''+e.id+'\',this)">'
-      +'<div class="c-date">'+esc(DM[e.id]||e.d)+stx+'</div>'
+      +'<div class="c-date">'+esc(DM[e.id]||e.d)+'<span class="tmx">'+esc(tmOf(e))+'</span>'+stx+'</div>'
       +'<div class="c-title">'+ck+B('t')
         +'<span class="ch'+(c?' ch-'+c:'')+'" onclick="palOpen(event,\''+e.id+'\')"></span>'+esc(e.t)
         +'<div class="tags">'+tg+B('g')+'</div></div>'
