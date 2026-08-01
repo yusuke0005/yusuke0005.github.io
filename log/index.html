@@ -110,6 +110,22 @@
   .del{float:right;font-size:.8em;color:#c0392b;opacity:.3;padding:0 .2em;margin-left:.3em}
   .empty{padding:2em .8em;color:#8a8775;font-size:.85em;text-align:center;background:#fff}
 
+  /* ---- 複数選択 ---- */
+  .ck{display:inline-block;width:1em;height:1em;border-radius:.15em;margin:0 .35em 0 0;
+      vertical-align:-.1em;background:#fff;box-shadow:inset 0 0 0 1px #8a8775;cursor:pointer}
+  .ck.on{background:#c8a03c;box-shadow:inset 0 0 0 1px #8a6f1e}
+  .row.sel{box-shadow:inset 0 0 0 .14em #c8a03c}
+  .selbar{display:none;margin-bottom:6px;background:#26251b;border:1px solid #3a382c;border-radius:5px;
+          padding:5px 6px;color:#cfcdbd;font-size:12px}
+  .selbar.on{display:block}
+  .selbar b{color:#c8a03c;font-weight:600;margin-right:6px}
+  .selbar button{font:inherit;font-size:12px;background:#3a382c;color:#f4f4f2;border:0;border-radius:3px;
+                 padding:4px 8px;margin:2px 3px 2px 0;cursor:pointer;-webkit-appearance:none}
+  .selbar button.b{background:#3b7dd8} .selbar button.r{background:#d0342c}
+  .selbar button.g{background:#4a9d5f} .selbar button.x{background:#b9b6a5;color:#16150f}
+  .selbar button.n{background:#f4f4f2;color:#16150f}
+  .selbar button.warn{background:#c0392b}
+
   /* ---- 下：入力。ここも出しっぱなし ---- */
   .in{flex:0 0 auto;background:#16150f;padding:7px 8px 8px;border-top:1px solid #3a382c}
   .prev{margin-bottom:6px;background:#0e0d08;color:#cfcdbd;border:1px solid #3a382c;border-radius:4px;
@@ -134,6 +150,7 @@
   <button onclick="Z(1)">＋</button>
   <button onclick="Zfit()">全</button>
   <div class="sp"></div>
+  <button id="bSel" onclick="selMode()">選</button>
   <button id="bClamp" onclick="Clamp()">畳</button>
   <button onclick="toBottom()">↓</button>
   <button onclick="sync()">⇅</button>
@@ -181,6 +198,18 @@
   </div>
 
   <div class="in">
+    <div class="selbar" id="selbar">
+      <b id="selcnt">0 件</b>
+      <button class="b" onclick="selColor('b')">青</button>
+      <button class="r" onclick="selColor('r')">赤</button>
+      <button class="g" onclick="selColor('g')">緑</button>
+      <button class="x" onclick="selColor('x')">灰</button>
+      <button class="n" onclick="selColor('')">無色</button>
+      <button onclick="selAll()">全選択</button>
+      <button onclick="selClear()">解除</button>
+      <button class="warn" id="bSelDel" onclick="selDel(this)">削除</button>
+      <button onclick="selMode()">選択おわり</button>
+    </div>
     <div class="prev" id="prev" style="display:none"></div>
     <div class="inrow">
       <textarea id="src" placeholder="ここに喋る。音声入力でそのまま流し込んでいい。話題が何個混ざっててもいい。"></textarea>
@@ -231,7 +260,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v12';
+var BUILD='v13';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -589,6 +618,65 @@ function setC(ev,id,c){
   if(activeC!==null) draw();   /* 色で絞ってる最中は並びが変わるので描き直す */
 }
 
+/* ============ 複数選択と一括操作 ============
+   レールの「選」でモードに入る。行をタップ＝選ぶ／外す（開閉はしない）。
+   下の帯で、色を一括で塗る・まとめて消す。 */
+var SELMODE=false, SEL={};
+
+function selMode(){
+  SELMODE=!SELMODE;
+  if(!SELMODE) SEL={};
+  document.getElementById('bSel').className=SELMODE?'on':'';
+  document.getElementById('selbar').className='selbar'+(SELMODE?' on':'');
+  selCnt(); draw();
+}
+function selIds(){ var a=[]; for(var k in SEL) if(SEL[k]) a.push(k); return a; }
+function selCnt(){ document.getElementById('selcnt').textContent=selIds().length+' 件'; }
+
+function rowTap(ev,id,el){
+  LASTID=id;
+  if(SELMODE){
+    SEL[id]=!SEL[id];
+    el.classList.toggle('sel',!!SEL[id]);
+    var c=el.getElementsByClassName('ck')[0];
+    if(c) c.className='ck'+(SEL[id]?' on':'');
+    selCnt(); return;
+  }
+  el.classList.toggle('open');
+}
+
+function selAll(){
+  var rs=document.getElementById('rows').getElementsByClassName('row');
+  var on=selIds().length<rs.length;   /* 全部入ってなければ全部入れる。入ってれば外す */
+  SEL={};
+  if(on) for(var i=0;i<rs.length;i++) SEL[rs[i].getAttribute('data-id')]=true;
+  selCnt(); draw();
+}
+function selClear(){ SEL={}; selCnt(); draw(); }
+
+function selColor(k){
+  var ids=selIds(); if(!ids.length) return;
+  var L=all();
+  L.forEach(function(e){ if(ids.indexOf(e.id)>=0) e.c=k; });
+  persist(); pushSoon(); colbar(); draw();
+}
+
+/* 削除は2段階。1回目で「本当に消す」に変わり、5秒でもとに戻る。confirm は使わない */
+var SDT=0;
+function selDel(b){
+  var ids=selIds(); if(!ids.length) return;
+  if(b.getAttribute('data-arm')!=='1'){
+    b.setAttribute('data-arm','1'); b.textContent='本当に消す（'+ids.length+'）';
+    clearTimeout(SDT);
+    SDT=setTimeout(function(){ b.removeAttribute('data-arm'); b.textContent='削除'; },5000);
+    return;
+  }
+  clearTimeout(SDT); b.removeAttribute('data-arm'); b.textContent='削除';
+  ids.forEach(function(id){ if(DEL.indexOf(id)<0) DEL.push(id); });
+  MEM=MEM.filter(function(x){ return ids.indexOf(x.id)<0; });
+  SEL={}; persist(); pushSoon(); draw(); tags(); colbar(); selCnt();
+}
+
 var active=null;
 function draw(){
   var L=all();
@@ -599,9 +687,11 @@ function draw(){
     var tg=(e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
     var c=e.c||'';
     var B=function(f){ return '<button class="cp'+(f==='g'?' cpt':'')+'" onclick="cp(event,\''+e.id+'\',\''+f+'\')">⧉</button>'; };
-    return '<div class="row'+(c?' k-'+c:'')+'" data-id="'+e.id+'" onclick="LASTID=\''+e.id+'\';this.classList.toggle(\'open\')">'
+    var sl=SELMODE&&SEL[e.id];
+    var ck=SELMODE?'<span class="ck'+(sl?' on':'')+'"></span>':'';
+    return '<div class="row'+(c?' k-'+c:'')+(sl?' sel':'')+'" data-id="'+e.id+'" onclick="rowTap(event,\''+e.id+'\',this)">'
       +'<div class="c-date">'+esc(e.d)+'</div>'
-      +'<div class="c-title"><span class="del" onclick="del(\''+e.id+'\',event)">✕</span>'+B('t')
+      +'<div class="c-title">'+ck+'<span class="del" onclick="del(\''+e.id+'\',event)">✕</span>'+B('t')
         +'<span class="ch'+(c?' ch-'+c:'')+'" onclick="palOpen(event,\''+e.id+'\')"></span>'+esc(e.t)
         +'<div class="tags">'+tg+B('g')+'</div></div>'
       +'<div class="c-org">'+B('org')+md(e.org)+'</div>'
