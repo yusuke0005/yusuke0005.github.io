@@ -151,6 +151,7 @@
   <button onclick="Zfit()">全</button>
   <div class="sp"></div>
   <button id="bSel" onclick="selMode()">選</button>
+  <button id="bTr" onclick="trashView()">🗑</button>
   <button id="bClamp" onclick="Clamp()">畳</button>
   <button onclick="toBottom()">↓</button>
   <button onclick="sync()">⇅</button>
@@ -207,7 +208,9 @@
       <button class="n" onclick="selColor('')">無色</button>
       <button onclick="selAll()">全選択</button>
       <button onclick="selClear()">解除</button>
-      <button class="warn" id="bSelDel" onclick="selDel(this)">削除</button>
+      <button id="bToTr" onclick="toTrash()">🗑 ゴミ箱へ</button>
+      <button id="bBack" onclick="unTrash()" style="display:none">戻す</button>
+      <button class="warn" id="bPurge" onclick="purge(this)" style="display:none">完全に削除</button>
       <button onclick="selMode()">選択おわり</button>
     </div>
     <div class="prev" id="prev" style="display:none"></div>
@@ -260,7 +263,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v13';
+var BUILD='v14';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -338,7 +341,7 @@ function done(acc,text,t0){
   if(!got.length){ st('形式が読めなかった。プレビューを見て'); document.getElementById('btn').disabled=false; return; }
   var cur=load();
   for(var i=got.length-1;i>=0;i--) cur.unshift(got[i]);   /* 保存は新しい順のまま */
-  save(cur); draw(); tags(); colbar(); toBottom(); pushSoon();
+  save(cur); draw(); tags(); colbar(); trCnt(); toBottom(); pushSoon();
   document.getElementById('src').value='';
   document.getElementById('prev').style.display='none';
   document.getElementById('btn').disabled=false;
@@ -416,10 +419,10 @@ var DEL=[];      /* 消したID。これが無いと他の端末から復活し�
 function load(){ return MEM; }
 function all(){ return MEM.concat(SEED); }
 function save(a){ MEM=a; persist(); }
-function del(id,ev){ ev.stopPropagation();
-  if(DEL.indexOf(id)<0) DEL.push(id);
-  MEM=MEM.filter(function(x){return x.id!==id;});
-  persist(); draw(); tags(); colbar(); pushSoon(); }
+/* 1件だけゴミ箱に入れる（今はボタンを置いてない。消すのは必ずゴミ箱経由） */
+function del(id,ev){ if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return; e.z=1;
+  persist(); draw(); tags(); colbar(); trCnt(); pushSoon(); }
 
 /* ---- 端末内：IndexedDB ---- */
 var IDB=null;
@@ -503,7 +506,7 @@ function sync(quiet,retry){
     var del=rd.concat(DEL.filter(function(x){ return rd.indexOf(x)<0; }));
     var before=JSON.stringify({e:g.data.entries,d:rd});
     var m=mix(MEM,g.data.entries,del);
-    MEM=m; DEL=del; persist(); draw(); tags(); colbar();
+    MEM=m; DEL=del; persist(); draw(); tags(); colbar(); trCnt();
     if(JSON.stringify({e:MEM,d:DEL})===before){ syst('同期OK '+MEM.length+'件'); SY=false; return; }
     return ghPut({entries:MEM,del:DEL},g.sha).then(function(){
       syst('保存した '+MEM.length+'件'); SY=false;
@@ -661,25 +664,52 @@ function selColor(k){
   persist(); pushSoon(); colbar(); draw();
 }
 
-/* 削除は2段階。1回目で「本当に消す」に変わり、5秒でもとに戻る。confirm は使わない */
+/* ============ ゴミ箱 ============
+   書いたものは財産。だから消さない。要らないものは灰色にするか、ゴミ箱に入れておく。
+   本当に消えるのはゴミ箱の中で「完全に削除」を2回押したときだけ。 */
+var TRASH=false;
+
+function trashView(){
+  TRASH=!TRASH;
+  SEL={};
+  document.getElementById('bTr').className=TRASH?'on':'';
+  document.getElementById('bToTr').style.display=TRASH?'none':'';
+  document.getElementById('bBack').style.display=TRASH?'':'none';
+  document.getElementById('bPurge').style.display=TRASH?'':'none';
+  if(TRASH&&!SELMODE) selMode(); else { selCnt(); draw(); }
+  toBottom();
+}
+function trCnt(){ var n=0; all().forEach(function(e){ if(e.z) n++; });
+  var b=document.getElementById('bTr'); if(b) b.textContent=n?('🗑'+n):'🗑'; }
+
+function setZ(v){
+  var ids=selIds(); if(!ids.length) return;
+  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ if(v) e.z=1; else delete e.z; } });
+  SEL={}; persist(); pushSoon(); draw(); tags(); colbar(); trCnt(); selCnt();
+}
+function toTrash(){ setZ(1); }
+function unTrash(){ setZ(0); }
+
+/* ここだけが本当に消える場所。2段階。1回目で「本当に消す」に変わり、5秒でもとに戻る */
 var SDT=0;
-function selDel(b){
+function purge(b){
   var ids=selIds(); if(!ids.length) return;
   if(b.getAttribute('data-arm')!=='1'){
     b.setAttribute('data-arm','1'); b.textContent='本当に消す（'+ids.length+'）';
     clearTimeout(SDT);
-    SDT=setTimeout(function(){ b.removeAttribute('data-arm'); b.textContent='削除'; },5000);
+    SDT=setTimeout(function(){ b.removeAttribute('data-arm'); b.textContent='完全に削除'; },5000);
     return;
   }
-  clearTimeout(SDT); b.removeAttribute('data-arm'); b.textContent='削除';
+  clearTimeout(SDT); b.removeAttribute('data-arm'); b.textContent='完全に削除';
   ids.forEach(function(id){ if(DEL.indexOf(id)<0) DEL.push(id); });
   MEM=MEM.filter(function(x){ return ids.indexOf(x.id)<0; });
-  SEL={}; persist(); pushSoon(); draw(); tags(); colbar(); selCnt();
+  SEL={}; persist(); pushSoon(); draw(); tags(); colbar(); trCnt(); selCnt();
 }
 
 var active=null;
 function draw(){
   var L=all();
+  L=L.filter(function(e){ return TRASH ? !!e.z : !e.z; });   /* z=1 はゴミ箱の中 */
   var list=active?L.filter(function(e){return (e.tag||[]).indexOf(active)>=0;}):L;
   if(activeC!==null) list=list.filter(function(e){ return (e.c||'')===activeC; });
   list=list.slice().reverse();   /* 古い順にして、いちばん下を最新にする */
@@ -691,7 +721,7 @@ function draw(){
     var ck=SELMODE?'<span class="ck'+(sl?' on':'')+'"></span>':'';
     return '<div class="row'+(c?' k-'+c:'')+(sl?' sel':'')+'" data-id="'+e.id+'" onclick="rowTap(event,\''+e.id+'\',this)">'
       +'<div class="c-date">'+esc(e.d)+'</div>'
-      +'<div class="c-title">'+ck+'<span class="del" onclick="del(\''+e.id+'\',event)">✕</span>'+B('t')
+      +'<div class="c-title">'+ck+B('t')
         +'<span class="ch'+(c?' ch-'+c:'')+'" onclick="palOpen(event,\''+e.id+'\')"></span>'+esc(e.t)
         +'<div class="tags">'+tg+B('g')+'</div></div>'
       +'<div class="c-org">'+B('org')+md(e.org)+'</div>'
@@ -856,7 +886,7 @@ document.getElementById('mdl').value=LS(KEY.m)||defMdl();
 if(LS(KEY.k)) document.getElementById('key').placeholder='APIキー保存済み（変えるときだけ入力）';
 document.getElementById('ghr').value=ghR();
 if(ghT()) document.getElementById('ght').placeholder='トークン保存済み（変えるときだけ入力）';
-tags(); colbar(); draw();
+tags(); colbar(); trCnt(); draw();
 var sv=LS(KEY.f); if(sv){ fs=parseFloat(sv); apply(); } else Zfit();
 toBottom();
 
@@ -866,7 +896,7 @@ idbOpen().then(function(){ return idbGet('entries'); }).then(function(v){
   return idbGet('del');
 }).then(function(d){
   DEL=d||[];
-  persist(); tags(); colbar(); draw(); toBottom();
+  persist(); tags(); colbar(); trCnt(); draw(); toBottom();
   if(ghOn()) sync(true); else syst('GitHub未設定（この端末にだけ保存中）');
 });
 document.getElementById('src').addEventListener('keydown',function(ev){
