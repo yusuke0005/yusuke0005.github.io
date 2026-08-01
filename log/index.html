@@ -104,9 +104,11 @@
   .pal .sw.s0{background:#fff;color:#8a8775} .pal .sw.s1{background:#3b7dd8}
   .pal .sw.s2{background:#d0342c} .pal .sw.s3{background:#4a9d5f} .pal .sw.s4{background:#b9b6a5}
   /* ---- 星＝重要度。色（次に何をやるか）とは別の軸。日付の下に置く ---- */
-  .stx{display:block;margin-top:.3em;white-space:nowrap;letter-spacing:-.06em}
-  .stx i{display:inline-block;font-style:normal;font-size:1.1em;line-height:1;
-         color:#e2dfd0;cursor:pointer}
+  /* 5つ確実に入るように、星1つぶんの幅を決め打ちする。
+     ★ の実際の字幅はフォント任せなので、幅を指定しないと端末によって5つ目がはみ出て消える。 */
+  .stx{display:block;margin-top:.3em;white-space:nowrap}
+  .stx i{display:inline-block;width:1.02em;font-style:normal;font-size:.88em;line-height:1;
+         text-align:center;color:#e2dfd0;cursor:pointer}
   .stx i.f{color:#c8a03c}
   .tags{margin-top:.4em}
   .tags span{display:inline-block;font-size:.85em;background:#eceadd;color:#6b6957;
@@ -123,6 +125,18 @@
   .cpt{float:none;display:inline-block;margin:0 0 .2em 0}
   .del{float:right;font-size:.8em;color:#c0392b;opacity:.3;padding:0 .2em;margin-left:.3em}
   .empty{padding:2em .8em;color:#8a8775;font-size:.85em;text-align:center;background:#fff}
+
+  /* ---- 区切り線。灰＝1日の区切り / 桃＝しおり ---- */
+  .sep{display:flex;align-items:center;gap:.5em;padding:.5em .6em;background:#f2f0e6;
+       border-bottom:1px solid #ddd9c9;font-size:.7em;color:#6b6957}
+  .sep .ln{flex:1 1 auto;height:2px;background:#b9b6a5}
+  .sep b{flex:0 0 auto;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .sep button{flex:0 0 auto;font:inherit;font-size:.95em;background:#fff;color:#5c5a48;
+              border:1px solid #b9b6a5;border-radius:.25em;padding:.15em .6em;
+              cursor:pointer;-webkit-appearance:none}
+  .sep-b{background:#fdeef3;border-bottom-color:#f0cddb;color:#a8547a}
+  .sep-b .ln{background:#e08aa8}
+  .sep-b button{border-color:#e08aa8;color:#a8547a}
 
   /* ---- 複数選択 ---- */
   .ck{display:inline-block;width:1em;height:1em;border-radius:.15em;margin:0 .35em 0 0;
@@ -165,6 +179,8 @@
   <button onclick="Z(1)">＋</button>
   <button onclick="Zfit()">全</button>
   <div class="sp"></div>
+  <button onclick="addSep('d')">区</button>
+  <button onclick="addSep('b')">栞</button>
   <button id="bSel" onclick="selMode()">選</button>
   <button id="bTr" onclick="trashView()">🗑</button>
   <button id="bClamp" onclick="Clamp()">畳</button>
@@ -304,8 +320,24 @@ var PSPLIT =
 "###E###\n\n"+
 FMT;
 
+/* まとめ用。区切り線の「まとめ」を押したとき、その区切りまでの範囲に使う。
+   事実ベース。助言も励ましも「明日やること」も書かせない。 */
+var PDAY =
+"以下は本人がその範囲のあいだに書き残したブロックです（古い順に並んでいます）。\n"+
+"この範囲で本人が何を考え、何をやったのかを、事実ベースで整理してください。\n"+
+"評価・励まし・助言・提案・感想は一切書かない。本人が書いていないことを足さない。\n"+
+"「明日やること」「次にやるべきこと」も書かない。あったことだけを整理する。\n"+
+"話題が多いときは話題ごとにまとめる。細かい話も落とさない。決まったこと・変わったことは必ず残す。\n"+
+"次の形式だけを出力してください。前置き・あとがき・説明は一切書かないこと。\n\n"+
+"###T### （その日を一言で表すタイトル。20字前後）\n"+
+"###G### 日誌\n"+
+"###O###\n"+
+"（整理本文。下の書式に従う）\n"+
+"###E###\n\n"+
+FMT;
+
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v21';
+var BUILD='v22';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -749,7 +781,7 @@ function setS(ev,id,n){
 function starbar(){
   var box=document.getElementById('starbar'); if(!box) return;
   var n=[0,0,0,0,0,0];
-  all().forEach(function(e){ if(!e.z) n[Math.min(5,e.s||0)]++; });
+  all().forEach(function(e){ if(!e.z&&!isSep(e)) n[Math.min(5,e.s||0)]++; });
   var h='<button class="'+(activeS===null?'on':'')+'" onclick="pickS(null,this)">全部</button>';
   for(var k=5;k>=1;k--){
     var c=0; for(var j=k;j<=5;j++) c+=n[j];
@@ -911,16 +943,123 @@ function purge(b){
   SEL={}; persist(); pushSoon(); draw(); tags(); colbar(); trCnt(); selCnt();
 }
 
+/* ============ 区切り線 ============
+   灰（d）＝1日の区切り。桃（b）＝しおり（自分でここに印を置きたいとき）。
+   区切り線は「どのブロックの下に来るか」を after で持つ。日付やIDで位置を決めない。
+   あとから間に何が入っても、指した相手の真下から動かないため。
+   まとめ＝1つ前の区切りからこの区切りまでを、AIに事実ベースで整理させる。
+   出来たまとめは before＝この区切りのID を持つ普通のブロックになる（タグは日誌）。
+   だから色も星もタグも普通に効くし、あとで常駐AIに読ませることもできる。 */
+function isSep(e){ return e && e.k==='sep'; }
+
+function weave(rows,seps){
+  var out=[], byAfter={}, byBefore={}, used={};
+  seps.forEach(function(s){ var a=s.after||''; (byAfter[a]=byAfter[a]||[]).push(s); });
+  rows.forEach(function(e){ if(e.before){ (byBefore[e.before]=byBefore[e.before]||[]).push(e); } });
+  function putSep(s){
+    used[s.id]=1;
+    (byBefore[s.id]||[]).forEach(function(x){ out.push(x); });   /* まとめは線の真上 */
+    out.push(s);
+  }
+  (byAfter['']||[]).forEach(putSep);                              /* いちばん上に置いた区切り */
+  rows.forEach(function(e){
+    if(e.before) return;                                          /* まとめは線のところで出す */
+    out.push(e);
+    (byAfter[e.id]||[]).forEach(putSep);
+  });
+  seps.forEach(function(s){ if(!used[s.id]) putSep(s); });        /* 指す相手を見失った線は末尾 */
+  var got={}; out.forEach(function(x){ got[x.id]=1; });
+  rows.forEach(function(e){ if(!got[e.id]) out.push(e); });        /* 線を見失ったまとめも捨てない */
+  return out;
+}
+
+/* この区切り線までの範囲（1つ前の区切りの次から、この区切りの直前まで）。まとめ自身は入れない */
+function sepRange(id){
+  var rows=document.getElementById('rows'); if(!rows) return [];
+  var kids=rows.children, buf=[], out=null;
+  for(var i=0;i<kids.length;i++){
+    var d=kids[i], eid=d.getAttribute('data-id'), e=eid?ent(eid):null;
+    if(!e) continue;
+    if(isSep(e)){ if(e.id===id){ out=buf; break; } buf=[]; continue; }
+    if(e.before) continue;                                        /* 前に作ったまとめは材料にしない */
+    buf.push(e);
+  }
+  return out||[];
+}
+
+function sepHtml(e){
+  var pink=e.sp==='b';
+  var lbl=pink?'しおり':(e.d||'');
+  var btn = TRASH
+    ? '<button onclick="unSep(event,\''+e.id+'\')">戻す</button>'
+    : '<button onclick="sumSep(event,\''+e.id+'\')">まとめ</button>'
+      +'<button onclick="delSep(event,\''+e.id+'\')">消</button>';
+  return '<div class="sep'+(pink?' sep-b':'')+'" data-id="'+e.id+'">'
+    +'<span class="ln"></span><b>'+esc(lbl)+'</b>'+btn+'<span class="ln"></span></div>';
+}
+
+/* 足す。選択モードで1つだけ選んでいればその下に。ふだんはいちばん下（＝最新の下）に置く */
+function addSep(kind){
+  var rows=document.getElementById('rows').children, after='', d='';
+  var ids=selIds();
+  if(ids.length===1){ after=ids[0]; var a=ent(after); d=(a&&a.d)||''; }
+  else{
+    for(var i=rows.length-1;i>=0;i--){
+      var eid=rows[i].getAttribute('data-id'), e=eid?ent(eid):null;
+      if(e&&!isSep(e)){ after=e.id; d=e.d||''; break; }
+    }
+  }
+  if(!d){ var t=new Date(); d=t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate()); }
+  MEM.unshift({id:'s'+Date.now()+Math.random().toString(36).slice(2,6),
+               k:'sep',sp:kind,d:d,after:after,t:'',u:Date.now()});
+  SEL={}; persist(); pushSoon(); draw(); selCnt();
+  st(kind==='b'?'しおりを置いた':'区切りを置いた');
+}
+function delSep(ev,id){ if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return; e.z=1; e.u=Date.now();
+  persist(); pushSoon(); draw(); trCnt(); }
+function unSep(ev,id){ if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return; delete e.z; e.u=Date.now();
+  persist(); pushSoon(); draw(); trCnt(); }
+
+function sumSep(ev,id){
+  if(ev) ev.stopPropagation();
+  var L=sepRange(id);
+  if(!L.length){ st('この区切りまでに中身が無い'); return; }
+  var src=L.map(function(e){
+    return '【'+(e.d||'')+'／'+(e.t||'')+'】\n'+(e.raw||e.org||'');
+  }).join('\n\n----\n\n');
+  var last=L[L.length-1];
+  ask(PDAY,src,L.length+'件をまとめ中…',function(acc,t0){
+    var got=parse(acc,src);
+    if(!got.length){ st('形式が読めなかった。プレビューを見て'); endAsk(); return; }
+    var n=got[0];
+    n.d=last.d; n.raw=''; n.before=id; n.u=Date.now();
+    if(n.tag.indexOf('日誌')<0) n.tag.unshift('日誌');
+    n.tag=fixTags(n.tag);
+    /* 前に作ったまとめが残っていればゴミ箱へ（消さない。上書きもしない） */
+    all().forEach(function(x){ if(x.before===id&&!x.z){ x.z=1; x.u=Date.now(); } });
+    MEM.unshift(n); sortMem(); persist(); pushSoon();
+    draw(); tags(); colbar(); trCnt(); endAsk();
+    st(L.length+'件をまとめた / '+((Date.now()-t0)/1000).toFixed(1)+'秒');
+  });
+}
+
 var active=null;
 function draw(){
   var L=all();
   L=L.filter(function(e){ return TRASH ? !!e.z : !e.z; });   /* z=1 はゴミ箱の中 */
+  /* 絞り込みが効いてる最中は区切り線を出さない。範囲の意味が壊れるから */
+  var seps=(active===null&&activeC===null&&activeS===null)?L.filter(isSep):[];
+  L=L.filter(function(e){ return !isSep(e); });
   var list=active?L.filter(function(e){return (e.tag||[]).indexOf(active)>=0;}):L;
   if(activeC!==null) list=list.filter(function(e){ return (e.c||'')===activeC; });
   if(activeS!==null) list=list.filter(function(e){ var s=e.s||0;
     return activeS===0 ? s===0 : s>=activeS; });
   list=list.slice().reverse();   /* 古い順にして、いちばん下を最新にする */
+  list=weave(list,seps);         /* 区切り線を、それぞれが指すブロックの下に差し込む */
   document.getElementById('rows').innerHTML = list.map(function(e){
+    if(isSep(e)) return sepHtml(e);
     var tg=(e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
     var c=e.c||'';
     var B=function(f){ return '<button class="cp'+(f==='g'?' cpt':'')+'" onclick="cp(event,\''+e.id+'\',\''+f+'\')">⧉</button>'; };
@@ -937,7 +1076,7 @@ function draw(){
       +'<div class="c-org">'+B('org')+md(e.org)+'</div>'
       +'<div class="c-raw">'+B('raw')+md(e.raw)+'</div></div>';
   }).join('') || '<div class="empty">まだ何もない</div>';
-  document.getElementById('cnt').textContent=list.length+' 件';
+  document.getElementById('cnt').textContent=list.filter(function(e){return !isSep(e);}).length+' 件';
 }
 function tags(){
   var s=[]; all().forEach(function(e){(e.tag||[]).forEach(function(x){if(s.indexOf(x)<0)s.push(x);});});
@@ -951,7 +1090,7 @@ function pick(x,b){ active=x; draw(); toBottom();
 /* 色で絞る */
 function colbar(){
   var L=all(), n={};
-  L.forEach(function(e){ var k=e.c||''; n[k]=(n[k]||0)+1; });
+  L.forEach(function(e){ if(isSep(e)) return; var k=e.c||''; n[k]=(n[k]||0)+1; });
   var h='<button class="'+(activeC===null?'on':'')+'" onclick="pickC(null,this)">全部</button>';
   h+=COL.map(function(c){
     return '<button class="'+(activeC===c.k?'on':'')+'" onclick="pickC(\''+c.k+'\',this)">'
