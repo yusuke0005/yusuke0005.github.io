@@ -129,7 +129,7 @@ var SEED = [
   raw:"そっか。Notionのデータベースだと、それが表になっていかないんだな。だからやっぱりいいわ。自作で作ったノートアプリに全部溜めていこう。\niPhoneとかで見たときも、PCと同じような感じで見たい。俯瞰して見たいから、ズームイン・ズームアウトできるような感じにしてほしい。とにかく俯瞰して見たいんだ。Notionとかだと俯瞰できないからさ、そういう設計になってんじゃん。あれが俺、許せないから。\nあと、カード形式にするにしても、余白はあんまつけないでほしい。ちゃんと繋がってる感は出したいから。" }
 ];
 
-var KEY={k:'log_key',m:'log_mdl',e:'log_entries',f:'log_fs'};
+var KEY={k:'log_key',m:'log_mdl',e:'log_entries',f:'log_fs',nt:'log_nothink'};
 var DEF_A='claude-sonnet-4-5';      /* Anthropic のとき */
 var DEF_G='gemini-flash-latest';    /* Google のとき */
 function LS(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
@@ -215,11 +215,12 @@ function run(){
     acc=''; pv.textContent='';
     return stream(key,mdl,P+"\n----\n"+text,noThink,delta);
   }
-  go(true)
+  go(LS(KEY.nt)!=='0')
     .then(function(){ done(acc,text,t0); })
     .catch(function(e){
-      /* thinkingConfig を受け付けないモデルなら、外してもう一度だけ */
-      if(!isAnth(key)&&e.code===400&&/think/i.test(e.message)){
+      /* thinkingConfig を受け付けないモデルなら、外してもう一度だけ。以後は覚えておく */
+      if(!isAnth(key)&&e.code===400&&LS(KEY.nt)!=='0'){
+        LS(KEY.nt,'0'); st('やり直し中…');
         return go(false).then(function(){ done(acc,text,t0); });
       }
       throw e;
