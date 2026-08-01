@@ -95,6 +95,7 @@
       <input id="mdl" placeholder="モデル">
       <button onclick="saveCfg()">保存</button>
       <button onclick="models()">使えるモデル</button>
+      <button onclick="test()">テスト</button>
       <button onclick="dump()">全部をJSONでコピー</button>
       <span id="cst"></span>
     </div>
@@ -154,7 +155,8 @@ var P =
 "箇条書きは行頭に「・」を付ける。強調は **太字**、特に重要な一文は ==マーカー== で囲める。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-function stream(key,mdl,prompt,noThink,onDelta){
+var BUILD='v3';
+function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
     url='https://api.anthropic.com/v1/messages';
@@ -164,9 +166,10 @@ function stream(key,mdl,prompt,noThink,onDelta){
       body:JSON.stringify({model:mdl,max_tokens:4000,stream:true,
         messages:[{role:'user',content:prompt}]})};
   }else{
-    var g={contents:[{role:'user',parts:[{text:prompt}]}],
-           generationConfig:{maxOutputTokens:8000,temperature:0.3}};
-    if(noThink) g.generationConfig.thinkingConfig={thinkingBudget:0};  /* 考え込ませない＝速い */
+    /* mode 0=考え込み切る（速い） 1=普通 2=最小限。400なら順に落として自動で当てにいく */
+    var g={contents:[{parts:[{text:prompt}]}]};
+    if(mode===0) g.generationConfig={maxOutputTokens:8000,thinkingConfig:{thinkingBudget:0}};
+    else if(mode===1) g.generationConfig={maxOutputTokens:8000};
     url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(mdl)
         +':streamGenerateContent?alt=sse&key='+encodeURIComponent(key);
     opt={method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(g)};
@@ -211,24 +214,35 @@ function run(){
   btn.disabled=true; st('整理中…'); pv.style.display='block'; pv.textContent='';
   var t0=Date.now(), acc='';
   function delta(t){ acc+=t; pv.textContent=acc; pv.scrollTop=pv.scrollHeight; }
-  function go(noThink){
+  function go(mode){
     acc=''; pv.textContent='';
-    return stream(key,mdl,P+"\n----\n"+text,noThink,delta);
-  }
-  go(LS(KEY.nt)!=='0')
-    .then(function(){ done(acc,text,t0); })
-    .catch(function(e){
-      /* thinkingConfig を受け付けないモデルなら、外してもう一度だけ。以後は覚えておく */
-      if(!isAnth(key)&&e.code===400&&LS(KEY.nt)!=='0'){
-        LS(KEY.nt,'0'); st('やり直し中…');
-        return go(false).then(function(){ done(acc,text,t0); });
-      }
-      throw e;
-    })
-    .catch(function(e){
-      st('エラー: '+e.message); btn.disabled=false;
+    return stream(key,mdl,P+"\n----\n"+text,mode,delta).then(function(){
+      LS(KEY.nt,mode); done(acc,text,t0);
+    }).catch(function(e){
+      if(!isAnth(key)&&e.code===400&&mode<2){ st('別のやり方で再送…'); return go(mode+1); }
+      st('エラー['+BUILD+'/mode'+mode+']: '+e.message); btn.disabled=false;
       if(!isAnth(key)&&(e.code===404||e.code===400)) models();
     });
+  }
+  var m=parseInt(LS(KEY.nt),10); if(isNaN(m)) m=0;
+  go(m);
+}
+
+/* 短い文で往復だけ試す（どのモードが通るか調べる） */
+function test(){
+  var key=LS(KEY.k), mdl=LS(KEY.m)||defMdl(), c=document.getElementById('cst'), out='';
+  document.getElementById('cfg').open=true;
+  if(!key){ c.textContent=' 先にキーを保存して'; return; }
+  function t(mode){
+    c.textContent=' '+BUILD+' mode'+mode+' 試し中…';
+    return stream(key,mdl,'1+1は？数字だけ答えて。',mode,function(x){out+=x;}).then(function(){
+      LS(KEY.nt,mode); c.textContent=' OK ['+BUILD+'/mode'+mode+'] 返答:'+out.slice(0,40);
+    }).catch(function(e){
+      if(mode<2) return t(mode+1);
+      c.textContent=' 全部NG ['+BUILD+'] '+e.message;
+    });
+  }
+  t(0);
 }
 
 /* 使えるモデル名を一覧する（Google用。モデル名が分からないときの逃げ道） */
