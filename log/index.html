@@ -218,6 +218,8 @@
       <button class="n" onclick="selColor('')">無色</button>
       <button onclick="selAll()">全選択</button>
       <button onclick="selClear()">解除</button>
+      <button id="bSplit" onclick="splitSel()">分割</button>
+      <button id="bJoin" onclick="joinSel()">連結</button>
       <button id="bToTr" onclick="toTrash()">🗑 ゴミ箱へ</button>
       <button id="bBack" onclick="unTrash()" style="display:none">戻す</button>
       <button class="warn" id="bPurge" onclick="purge(this)" style="display:none">完全に削除</button>
@@ -250,17 +252,8 @@ function isAnth(k){ return String(k||'').indexOf('sk-ant')===0; }
 function defMdl(){ return isAnth(LS(KEY.k))?DEF_A:DEF_G; }
 
 /* ============ プロンプト ============ */
-var P =
-"以下は本人が頭の中をそのまま吐き出したテキストです。\n"+
-"これを、あとから読み返した本人が「自分は何を言っていたか」を一瞬で思い出せる形に整えてください。要約ではなく整理です。内容は減らさない。書かれていないことは足さない。一般論・きれいごと・あなたの意見・評価は一切書かない。本人の言葉づかいを残すこと。\n\n"+
-"まず、話題の切り替わりでテキストを区切ってください。1つの話題しか無ければ1つのままにすること。無理に割らないこと。\n"+
-"話題ごとに、次の形式だけを出力してください。前置き・あとがき・説明は一切書かないこと。\n\n"+
-"###T### （その話題を表す具体的なタイトル。20字前後）\n"+
-"###G### （タグ。次から1〜2個をカンマ区切り: アイデア,仕事・キャリア,価値観・生き方,悩み・モヤモヤ,学び,プロジェクト,トレーニング,アスリート,FX,システム,生活）\n"+
-"###F### （その話題が始まる箇所の原文を、先頭から15文字ちょうどコピーして貼る。一字一句変えないこと）\n"+
-"###O###\n"+
-"（整理本文。下の書式に従う）\n"+
-"###E###\n\n"+
+/* 整理本文の書式（P と PSPLIT で共通） */
+var FMT =
 "整理本文の書式（ここが最重要。パッと見て内容が分かることを最優先にする）：\n"+
 "1行目に、その話題の結論を **太字の一文** で書く。\n"+
 "次の行を空けて、2〜3文の説明を書く。ここは箇条書きにしない。\n"+
@@ -272,8 +265,33 @@ var P =
 "箇条書きの項目に見出しを付けたいときは「・**項目名**：説明」の形にしてよい。\n"+
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
+var P =
+"以下は本人が頭の中をそのまま吐き出したテキストです。\n"+
+"これを、あとから読み返した本人が「自分は何を言っていたか」を一瞬で思い出せる形に整えてください。要約ではなく整理です。内容は減らさない。書かれていないことは足さない。一般論・きれいごと・あなたの意見・評価は一切書かない。本人の言葉づかいを残すこと。\n\n"+
+"**話題がいくつ混ざっていても、絶対に分割しないこと。1回の入力は1つのブロックにまとめる。** 分けるかどうかは本人があとで決める。\n"+
+"次の形式だけを出力してください。前置き・あとがき・説明は一切書かないこと。\n\n"+
+"###T### （全体を表す具体的なタイトル。20字前後。話題が複数あるなら、まとめて言い表すタイトルにする）\n"+
+"###G### （タグ。次から1〜3個をカンマ区切り: アイデア,仕事・キャリア,価値観・生き方,悩み・モヤモヤ,学び,プロジェクト,トレーニング,アスリート,FX,システム,生活）\n"+
+"###O###\n"+
+"（整理本文。下の書式に従う）\n"+
+"###E###\n\n"+
+FMT;
+
+/* 分割用。押したときだけ話題ごとに割る。###F### は原文を切り分ける目印 */
+var PSPLIT =
+"以下は本人が1つのブロックにまとめて書いたテキストです。話題の切り替わりで区切ってください。\n"+
+"はっきり別の話に切り替わっている箇所だけで割ること。無理に割らない。割れないなら1つのままでよい。\n"+
+"話題ごとに、次の形式だけを出力してください。前置き・あとがき・説明は一切書かないこと。\n\n"+
+"###T### （その話題を表す具体的なタイトル。20字前後）\n"+
+"###G### （タグ。次から1〜2個をカンマ区切り: アイデア,仕事・キャリア,価値観・生き方,悩み・モヤモヤ,学び,プロジェクト,トレーニング,アスリート,FX,システム,生活）\n"+
+"###F### （その話題が始まる箇所の原文を、先頭から15文字ちょうどコピーして貼る。一字一句変えないこと）\n"+
+"###O###\n"+
+"（整理本文。元のブロックと同じ書式に従う）\n"+
+"###E###\n\n"+
+FMT;
+
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v18';
+var BUILD='v19';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -322,20 +340,20 @@ function stream(key,mdl,prompt,mode,onDelta){
   });
 }
 
-/* ============ 実行 ============ */
-function run(){
-  var text=document.getElementById('src').value.trim();
+/* ============ 実行 ============
+   AIに投げる口はここ1つ。整理も分割も連結も、渡すプロンプトが違うだけ。 */
+function ask(pr,text,label,ok){
   var key=LS(KEY.k), mdl=LS(KEY.m)||defMdl();
   if(!text) return;
   if(!key){ railOpen(); st('先に設定でAPIキーを入れて'); return; }
   var btn=document.getElementById('btn'), pv=document.getElementById('prev');
-  btn.disabled=true; st('整理中…'); pv.style.display='block'; pv.textContent='';
+  btn.disabled=true; st(label); pv.style.display='block'; pv.textContent='';
   var t0=Date.now(), acc='';
   function delta(t){ acc+=t; pv.textContent=acc; pv.scrollTop=pv.scrollHeight; }
   function go(mode){
     acc=''; pv.textContent='';
-    return stream(key,mdl,P+"\n----\n"+text,mode,delta).then(function(){
-      LS(KEY.nt,mode); done(acc,text,t0);
+    return stream(key,mdl,pr+"\n----\n"+text,mode,delta).then(function(){
+      LS(KEY.nt,mode); ok(acc,t0);
     }).catch(function(e){
       if(!isAnth(key)&&e.code===400&&mode<2){ st('別のやり方で再送…'); return go(mode+1); }
       st('エラー['+BUILD+'/mode'+mode+']: '+e.message); btn.disabled=false;
@@ -344,6 +362,13 @@ function run(){
   }
   var m=parseInt(LS(KEY.nt),10); if(isNaN(m)) m=0;
   go(m);
+}
+function endAsk(){ document.getElementById('btn').disabled=false;
+  document.getElementById('prev').style.display='none'; }
+
+function run(){
+  var text=document.getElementById('src').value.trim();
+  ask(P,text,'整理中…',function(acc,t0){ done(acc,text,t0); });
 }
 
 function done(acc,text,t0){
@@ -715,6 +740,8 @@ function trashView(){
   SEL={};
   document.getElementById('bTr').className=TRASH?'on':'';
   document.getElementById('bToTr').style.display=TRASH?'none':'';
+  document.getElementById('bSplit').style.display=TRASH?'none':'';
+  document.getElementById('bJoin').style.display=TRASH?'none':'';
   document.getElementById('bBack').style.display=TRASH?'':'none';
   document.getElementById('bPurge').style.display=TRASH?'':'none';
   if(TRASH&&!SELMODE) selMode(); else { selCnt(); draw(); }
@@ -730,6 +757,63 @@ function setZ(v){
 }
 function toTrash(){ setZ(1); }
 function unTrash(){ setZ(0); }
+
+/* ============ 分割と連結 ============
+   1回の入力＝1ブロックが基本。長すぎたら押して割る。切りすぎたら押して繋ぐ。
+   どちらも元のブロックはゴミ箱に残す。消さない。 */
+function sortMem(){
+  MEM.sort(function(x,y){
+    var c=String(y.d||'').localeCompare(String(x.d||''));
+    return c!==0?c:String(y.id).localeCompare(String(x.id));
+  });
+}
+function trashIds(ids){
+  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ e.z=1; e.u=Date.now(); } });
+}
+
+function splitSel(){
+  var ids=selIds();
+  if(ids.length!==1){ st('分割は1つだけ選んで'); return; }
+  var e=ent(ids[0]); if(!e) return;
+  var src=e.raw||e.org||''; if(!src){ st('原文が無い'); return; }
+  ask(PSPLIT,src,'分割中…',function(acc,t0){
+    var got=parse(acc,src);
+    if(got.length<2){ st('分けられる境目が無かった'); endAsk(); return; }
+    got.forEach(function(g){ g.d=e.d; g.c=e.c||''; g.u=Date.now(); });
+    trashIds([e.id]);
+    for(var i=got.length-1;i>=0;i--) MEM.unshift(got[i]);
+    sortMem(); SEL={}; persist(); pushSoon();
+    draw(); tags(); colbar(); trCnt(); selCnt(); endAsk();
+    st(got.length+'個に分けた。元のブロックはゴミ箱にある');
+  });
+}
+
+function joinSel(){
+  var ids=selIds();
+  if(ids.length<2){ st('連結は2つ以上選んで'); return; }
+  var L=all().filter(function(e){ return ids.indexOf(e.id)>=0; });
+  L.sort(function(x,y){                     /* 古い順に繋ぐ */
+    var c=String(x.d||'').localeCompare(String(y.d||''));
+    return c!==0?c:String(x.id).localeCompare(String(y.id));
+  });
+  var src=L.map(function(e){ return e.raw||e.org||''; }).filter(Boolean).join('\n\n');
+  if(!src){ st('原文が無い'); return; }
+  ask(P,src,'連結中…',function(acc,t0){
+    var got=parse(acc,src);
+    if(!got.length){ st('形式が読めなかった。プレビューを見て'); endAsk(); return; }
+    var n=got[0];
+    n.d=L[0].d;                              /* 日付はいちばん古いものに合わせる */
+    n.raw=src; n.u=Date.now();
+    n.c=(L.filter(function(e){return e.c;})[0]||{}).c||'';
+    var tg=[]; L.forEach(function(e){ (e.tag||[]).forEach(function(x){ if(tg.indexOf(x)<0) tg.push(x); }); });
+    (n.tag||[]).forEach(function(x){ if(tg.indexOf(x)<0) tg.push(x); });
+    n.tag=tg.slice(0,4);
+    trashIds(ids);
+    MEM.unshift(n); sortMem(); SEL={}; persist(); pushSoon();
+    draw(); tags(); colbar(); trCnt(); selCnt(); endAsk();
+    st(L.length+'個を1つにした。元のブロックはゴミ箱にある');
+  });
+}
 
 /* ここだけが本当に消える場所。2段階。1回目で「本当に消す」に変わり、5秒でもとに戻る */
 var SDT=0;
