@@ -134,6 +134,9 @@
   .sep button{flex:0 0 auto;font:inherit;font-size:.95em;background:#fff;color:#5c5a48;
               border:1px solid #b9b6a5;border-radius:.25em;padding:.15em .6em;
               cursor:pointer;-webkit-appearance:none}
+  .sep input.dt{font:inherit;font-size:1em;color:inherit;background:#fff;border:1px solid #b9b6a5;
+                border-radius:.25em;padding:.1em .35em;-webkit-appearance:none;
+                min-width:8.6em;text-align:center}
   .sep-b{background:#fdeef3;border-bottom-color:#f0cddb;color:#a8547a}
   .sep-b .ln{background:#e08aa8}
   .sep-b button{border-color:#e08aa8;color:#a8547a}
@@ -337,7 +340,7 @@ var PDAY =
 FMT;
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v22';
+var BUILD='v23';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -345,7 +348,7 @@ function stream(key,mdl,prompt,mode,onDelta){
     opt={method:'POST',
       headers:{'content-type':'application/json','x-api-key':key,
                'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:mdl,max_tokens:4000,stream:true,
+      body:JSON.stringify({model:mdl,max_tokens:8000,stream:true,
         messages:[{role:'user',content:prompt}]})};
   }else{
     /* mode 0=考え込み切る（速い） 1=普通 2=最小限。400なら順に落として自動で当てにいく */
@@ -399,10 +402,15 @@ function ask(pr,text,label,ok){
   function go(mode){
     acc=''; pv.textContent='';
     return stream(key,mdl,pr+"\n----\n"+text,mode,delta).then(function(){
-      LS(KEY.nt,mode); ok(acc,t0);
+      LS(KEY.nt,mode);
+      /* ここで落ちたのを通信エラーと混ぜない。原因が分からなくなるから */
+      try{ ok(acc,t0); }
+      catch(err){ st('処理エラー['+BUILD+']: '+err.message); btn.disabled=false; }
     }).catch(function(e){
       if(!isAnth(key)&&e.code===400&&mode<2){ st('別のやり方で再送…'); return go(mode+1); }
-      st('エラー['+BUILD+'/mode'+mode+']: '+e.message); btn.disabled=false;
+      var m='エラー['+BUILD+'/mode'+mode+']: '+e.message;
+      st(m); pv.style.display='block'; pv.textContent=m+"\n\n（この文をそのままコピーして貼ってくれ）";
+      btn.disabled=false;
       if(!isAnth(key)&&(e.code===404||e.code===400)) models();
     });
   }
@@ -987,33 +995,71 @@ function sepRange(id){
   return out||[];
 }
 
-function sepHtml(e){
-  var pink=e.sp==='b';
-  var lbl=pink?'しおり':(e.d||'');
-  var btn = TRASH
-    ? '<button onclick="unSep(event,\''+e.id+'\')">戻す</button>'
-    : '<button onclick="sumSep(event,\''+e.id+'\')">まとめ</button>'
-      +'<button onclick="delSep(event,\''+e.id+'\')">消</button>';
-  return '<div class="sep'+(pink?' sep-b':'')+'" data-id="'+e.id+'">'
-    +'<span class="ln"></span><b>'+esc(lbl)+'</b>'+btn+'<span class="ln"></span></div>';
+/* 日付は「書いた瞬間の時計」でしかない。夜中の1時に書けば翌日になってしまう。
+   だから何日ぶんかを決めるのは区切り線のほうにする。
+   線に属するブロックは、線が持つ日付で表示する（データの d は原本のまま触らない）。 */
+function dPlus(s,n){
+  var p=String(s||'').split('-');
+  if(p.length!==3) return s;
+  var t=new Date(+p[0],+p[1]-1,+p[2]);
+  if(isNaN(t.getTime())) return s;
+  t.setDate(t.getDate()+n);
+  return t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate());
+}
+function today(){ var t=new Date();
+  return t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate()); }
+
+/* ブロックID → 表示する日付。自分より下にある最初の「1日の区切り」の日付を使う */
+function dayMap(list){
+  var m={}, cur=null;
+  for(var i=list.length-1;i>=0;i--){
+    var e=list[i];
+    if(isSep(e)){ if(e.sp!=='b'&&e.d) cur=e.d; continue; }
+    if(cur) m[e.id]=cur;
+  }
+  return m;
 }
 
-/* 足す。選択モードで1つだけ選んでいればその下に。ふだんはいちばん下（＝最新の下）に置く */
+function sepHtml(e){
+  var pink=e.sp==='b';
+  var lbl=pink
+    ? '<b>しおり</b>'
+    : '<b><input type="date" class="dt" value="'+esc(e.d||'')+'" onclick="event.stopPropagation()"'
+      +' onchange="setSepD(event,\''+e.id+'\')"></b>';
+  var btn = TRASH
+    ? '<button onclick="unSep(event,\''+e.id+'\')">戻す</button>'
+    : (pink?'':'<button onclick="sumSep(event,\''+e.id+'\')">まとめ</button>')
+      +'<button onclick="delSep(event,\''+e.id+'\')">消</button>';
+  return '<div class="sep'+(pink?' sep-b':'')+'" data-id="'+e.id+'">'
+    +'<span class="ln"></span>'+lbl+btn+'<span class="ln"></span></div>';
+}
+function setSepD(ev,id){
+  if(ev) ev.stopPropagation();
+  var v=ev.target.value; if(!v) return;
+  var e=ent(id); if(!e) return;
+  e.d=v; e.u=Date.now(); persist(); pushSoon(); draw();
+  st('区切りの日付を '+v+' にした');
+}
+
+/* 足す。選択モードで1つだけ選んでいればその下に。ふだんはいちばん下（＝最新の下）に置く。
+   日付は「1つ前の1日区切りの次の日」を自動で入れる。違ったら線の日付を直せばいい。 */
 function addSep(kind){
-  var rows=document.getElementById('rows').children, after='', d='';
-  var ids=selIds();
-  if(ids.length===1){ after=ids[0]; var a=ent(after); d=(a&&a.d)||''; }
-  else{
-    for(var i=rows.length-1;i>=0;i--){
-      var eid=rows[i].getAttribute('data-id'), e=eid?ent(eid):null;
-      if(e&&!isSep(e)){ after=e.id; d=e.d||''; break; }
-    }
+  var rows=document.getElementById('rows').children;
+  var ids=selIds(), target=ids.length===1?ids[0]:null;
+  var prev=null, lastB=null;
+  for(var i=0;i<rows.length;i++){
+    var eid=rows[i].getAttribute('data-id'), e=eid?ent(eid):null;
+    if(!e) continue;
+    if(isSep(e)){ if(e.sp!=='b') prev=e; }
+    else lastB=e;
+    if(target&&e.id===target) break;
   }
-  if(!d){ var t=new Date(); d=t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate()); }
+  var after=target||(lastB?lastB.id:'');
+  var d = prev&&prev.d ? dPlus(prev.d,1) : ((lastB&&lastB.d)||today());
   MEM.unshift({id:'s'+Date.now()+Math.random().toString(36).slice(2,6),
                k:'sep',sp:kind,d:d,after:after,t:'',u:Date.now()});
   SEL={}; persist(); pushSoon(); draw(); selCnt();
-  st(kind==='b'?'しおりを置いた':'区切りを置いた');
+  st(kind==='b'?'しおりを置いた':('区切りを置いた（'+d+'）。違ったら日付を押して直して'));
 }
 function delSep(ev,id){ if(ev) ev.stopPropagation();
   var e=ent(id); if(!e) return; e.z=1; e.u=Date.now();
@@ -1026,15 +1072,16 @@ function sumSep(ev,id){
   if(ev) ev.stopPropagation();
   var L=sepRange(id);
   if(!L.length){ st('この区切りまでに中身が無い'); return; }
+  /* 材料は整理本文のほうを使う。原文を全部足すと長くなりすぎて弾かれる */
   var src=L.map(function(e){
-    return '【'+(e.d||'')+'／'+(e.t||'')+'】\n'+(e.raw||e.org||'');
+    return '【'+(e.t||'')+'】\n'+(e.org||e.raw||'');
   }).join('\n\n----\n\n');
-  var last=L[L.length-1];
+  var sp=ent(id);
   ask(PDAY,src,L.length+'件をまとめ中…',function(acc,t0){
     var got=parse(acc,src);
     if(!got.length){ st('形式が読めなかった。プレビューを見て'); endAsk(); return; }
     var n=got[0];
-    n.d=last.d; n.raw=''; n.before=id; n.u=Date.now();
+    n.d=(sp&&sp.d)||L[L.length-1].d; n.raw=''; n.before=id; n.u=Date.now();
     if(n.tag.indexOf('日誌')<0) n.tag.unshift('日誌');
     n.tag=fixTags(n.tag);
     /* 前に作ったまとめが残っていればゴミ箱へ（消さない。上書きもしない） */
@@ -1058,6 +1105,7 @@ function draw(){
     return activeS===0 ? s===0 : s>=activeS; });
   list=list.slice().reverse();   /* 古い順にして、いちばん下を最新にする */
   list=weave(list,seps);         /* 区切り線を、それぞれが指すブロックの下に差し込む */
+  var DM=dayMap(list);           /* 線に属するブロックは、線が決めた日付で見せる */
   document.getElementById('rows').innerHTML = list.map(function(e){
     if(isSep(e)) return sepHtml(e);
     var tg=(e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
@@ -1069,7 +1117,7 @@ function draw(){
     var stx='<span class="stx">'+[1,2,3,4,5].map(function(k){
       return '<i class="'+(k<=sv?'f':'')+'" onclick="setS(event,\''+e.id+'\','+k+')">★</i>'; }).join('')+'</span>';
     return '<div class="row'+(c?' k-'+c:'')+(sl?' sel':'')+'" data-id="'+e.id+'" onclick="rowTap(event,\''+e.id+'\',this)">'
-      +'<div class="c-date">'+esc(e.d)+stx+'</div>'
+      +'<div class="c-date">'+esc(DM[e.id]||e.d)+stx+'</div>'
       +'<div class="c-title">'+ck+B('t')
         +'<span class="ch'+(c?' ch-'+c:'')+'" onclick="palOpen(event,\''+e.id+'\')"></span>'+esc(e.t)
         +'<div class="tags">'+tg+B('g')+'</div></div>'
