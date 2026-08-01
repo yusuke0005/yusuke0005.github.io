@@ -103,6 +103,11 @@
            padding-left:.6em;white-space:nowrap;color:#fff}
   .pal .sw.s0{background:#fff;color:#8a8775} .pal .sw.s1{background:#3b7dd8}
   .pal .sw.s2{background:#d0342c} .pal .sw.s3{background:#4a9d5f} .pal .sw.s4{background:#b9b6a5}
+  /* ---- 星＝重要度。色（次に何をやるか）とは別の軸。日付の下に置く ---- */
+  .stx{display:block;margin-top:.3em;white-space:nowrap;letter-spacing:-.06em}
+  .stx i{display:inline-block;font-style:normal;font-size:1.1em;line-height:1;
+         color:#e2dfd0;cursor:pointer}
+  .stx i.f{color:#c8a03c}
   .tags{margin-top:.4em}
   .tags span{display:inline-block;font-size:.85em;background:#eceadd;color:#6b6957;
              border-radius:2px;padding:0 .35em;margin:0 .25em .2em 0}
@@ -133,6 +138,7 @@
   .selbar button.b{background:#3b7dd8} .selbar button.r{background:#d0342c}
   .selbar button.g{background:#4a9d5f} .selbar button.x{background:#b9b6a5;color:#16150f}
   .selbar button.n{background:#f4f4f2;color:#16150f}
+  .selbar button.s{background:#c8a03c;color:#16150f} .selbar button.s0{background:#4a4838}
   .selbar button.warn{background:#c0392b}
 
   /* ---- 下：入力。ここも出しっぱなし ---- */
@@ -175,6 +181,8 @@
     <div class="tg" id="tagbar"></div>
     <h4>色</h4>
     <div class="tg" id="colbar"></div>
+    <h4>星</h4>
+    <div class="tg" id="starbar"></div>
     <h4>設定</h4>
     <input id="key" type="password" placeholder="APIキー">
     <input id="mdl" placeholder="モデル">
@@ -218,7 +226,13 @@
       <button class="n" onclick="selColor('')">無色</button>
       <button onclick="selAll()">全選択</button>
       <button onclick="selClear()">解除</button>
-      <button id="bSplit" onclick="splitSel()">分割</button>
+      <button class="s" onclick="selStar(1)">★1</button>
+  <button class="s" onclick="selStar(2)">★2</button>
+  <button class="s" onclick="selStar(3)">★3</button>
+  <button class="s" onclick="selStar(4)">★4</button>
+  <button class="s" onclick="selStar(5)">★5</button>
+  <button class="s0" onclick="selStar(0)">★消</button>
+  <button id="bSplit" onclick="splitSel()">分割</button>
       <button id="bJoin" onclick="joinSel()">連結</button>
       <button id="bToTr" onclick="toTrash()">🗑 ゴミ箱へ</button>
       <button id="bBack" onclick="unTrash()" style="display:none">戻す</button>
@@ -291,7 +305,7 @@ var PSPLIT =
 FMT;
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v20';
+var BUILD='v21';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -711,6 +725,43 @@ function setC(ev,id,c){
   if(activeC!==null) draw();   /* 色で絞ってる最中は並びが変わるので描き直す */
 }
 
+/* ============ 星＝重要度（1〜5） ============
+   色は「次に何をやるか」。星は「どれだけ大事か」。別の軸なので混ぜない。
+   日付の下の5つの星を直接タップして付ける。同じ星をもう一回押すと消える。 */
+var activeS=null;   /* 星での絞り込み。null＝全部 / 0＝星なし / 1〜5＝その数以上 */
+
+function setS(ev,id,n){
+  if(SELMODE) return;              /* 選択モード中はタップを行の選択にゆずる */
+  if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return;
+  var v=((e.s||0)===n)?0:n;        /* 同じ星をもう一回押したら外れる */
+  if(v) e.s=v; else delete e.s;
+  e.u=Date.now(); persist(); pushSoon(); starbar();
+  var row=document.querySelector('.row[data-id="'+id+'"]');
+  if(row){
+    var box=row.getElementsByClassName('stx')[0];
+    if(box){ var xs=box.getElementsByTagName('i');
+      for(var i=0;i<xs.length;i++) xs[i].className=(i<v?'f':''); }
+  }
+  if(activeS!==null) draw();       /* 星で絞ってる最中は並びが変わるので描き直す */
+}
+
+function starbar(){
+  var box=document.getElementById('starbar'); if(!box) return;
+  var n=[0,0,0,0,0,0];
+  all().forEach(function(e){ if(!e.z) n[Math.min(5,e.s||0)]++; });
+  var h='<button class="'+(activeS===null?'on':'')+'" onclick="pickS(null,this)">全部</button>';
+  for(var k=5;k>=1;k--){
+    var c=0; for(var j=k;j<=5;j++) c+=n[j];
+    h+='<button class="'+(activeS===k?'on':'')+'" onclick="pickS('+k+',this)">★'+k+'↑ '+c+'</button>';
+  }
+  h+='<button class="'+(activeS===0?'on':'')+'" onclick="pickS(0,this)">なし '+n[0]+'</button>';
+  box.innerHTML=h;
+}
+function pickS(k,b){ activeS=k; draw(); toBottom();
+  var bs=document.getElementById('starbar').getElementsByTagName('button');
+  for(var i=0;i<bs.length;i++) bs[i].className=''; b.className='on'; }
+
 /* ============ 複数選択と一括操作 ============
    レールの「選」でモードに入る。行をタップ＝選ぶ／外す（開閉はしない）。
    下の帯で、色を一括で塗る・まとめて消す。 */
@@ -752,6 +803,11 @@ function selColor(k){
   var L=all();
   L.forEach(function(e){ if(ids.indexOf(e.id)>=0){ e.c=k; e.u=Date.now(); } });
   persist(); pushSoon(); colbar(); draw();
+}
+function selStar(n){
+  var ids=selIds(); if(!ids.length) return;
+  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ if(n) e.s=n; else delete e.s; e.u=Date.now(); } });
+  persist(); pushSoon(); starbar(); draw();
 }
 
 /* ============ ゴミ箱 ============
@@ -861,6 +917,8 @@ function draw(){
   L=L.filter(function(e){ return TRASH ? !!e.z : !e.z; });   /* z=1 はゴミ箱の中 */
   var list=active?L.filter(function(e){return (e.tag||[]).indexOf(active)>=0;}):L;
   if(activeC!==null) list=list.filter(function(e){ return (e.c||'')===activeC; });
+  if(activeS!==null) list=list.filter(function(e){ var s=e.s||0;
+    return activeS===0 ? s===0 : s>=activeS; });
   list=list.slice().reverse();   /* 古い順にして、いちばん下を最新にする */
   document.getElementById('rows').innerHTML = list.map(function(e){
     var tg=(e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
@@ -868,8 +926,11 @@ function draw(){
     var B=function(f){ return '<button class="cp'+(f==='g'?' cpt':'')+'" onclick="cp(event,\''+e.id+'\',\''+f+'\')">⧉</button>'; };
     var sl=SELMODE&&SEL[e.id];
     var ck=SELMODE?'<span class="ck'+(sl?' on':'')+'"></span>':'';
+    var sv=e.s||0;
+    var stx='<span class="stx">'+[1,2,3,4,5].map(function(k){
+      return '<i class="'+(k<=sv?'f':'')+'" onclick="setS(event,\''+e.id+'\','+k+')">★</i>'; }).join('')+'</span>';
     return '<div class="row'+(c?' k-'+c:'')+(sl?' sel':'')+'" data-id="'+e.id+'" onclick="rowTap(event,\''+e.id+'\',this)">'
-      +'<div class="c-date">'+esc(e.d)+'</div>'
+      +'<div class="c-date">'+esc(e.d)+stx+'</div>'
       +'<div class="c-title">'+ck+B('t')
         +'<span class="ch'+(c?' ch-'+c:'')+'" onclick="palOpen(event,\''+e.id+'\')"></span>'+esc(e.t)
         +'<div class="tags">'+tg+B('g')+'</div></div>'
@@ -896,6 +957,7 @@ function colbar(){
     return '<button class="'+(activeC===c.k?'on':'')+'" onclick="pickC(\''+c.k+'\',this)">'
       +c.n+' '+(n[c.k]||0)+'</button>'; }).join('');
   document.getElementById('colbar').innerHTML=h;
+  starbar();   /* 星の帯も一緒に更新する。呼ぶ場所を増やさないため */
 }
 function pickC(k,b){ activeC=k; draw(); toBottom();
   var bs=document.getElementById('colbar').getElementsByTagName('button');
