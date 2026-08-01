@@ -41,7 +41,9 @@
   /* ---- 右：本体 ---- */
   .main{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column}
   /* min-height:0 が無いとAndroidで中身がはみ出して下の入力欄が画面外に落ちる */
-  .feed{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .feed{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;
+       touch-action:pan-x pan-y}
+  /* touch-action:pan-x pan-y ＝ スクロールは残してピンチだけ自前で拾う */
 
   /* ---- 表。font-size 1本で全部が比例して拡大縮小する ---- */
   #zoom,#zhead{font-size:16px}
@@ -196,7 +198,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v7';
+var BUILD='v8';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -534,13 +536,47 @@ function pick(x,b){ active=x; draw(); toBottom();
 function toBottom(){ var f=document.getElementById('feed'); f.scrollTop=f.scrollHeight; }
 
 /* ============ ズーム ============ */
-var fs=16;
-function apply(){ document.getElementById('zoom').style.fontSize=fs+'px';
-                  document.getElementById('zhead').style.fontSize=fs+'px'; LS(KEY.f,fs); }
-function Z(d){ fs=Math.max(5,Math.min(30,fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2)))); apply(); }
+var fs=16, ZMIN=2, ZMAX=40;
+function apply(nosave){ document.getElementById('zoom').style.fontSize=fs+'px';
+                  document.getElementById('zhead').style.fontSize=fs+'px';
+                  if(!nosave) LS(KEY.f,fs); }
+function Zc(v){ return Math.max(ZMIN,Math.min(ZMAX,v)); }
+function Z(d){ fs=Zc(fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2))); apply(); }
 function Zfit(){ var f=document.getElementById('feed');
   var w=(f&&f.clientWidth)||window.innerWidth;
-  fs=Math.max(5,Math.min(20,(w-4)/62)); apply(); }
+  fs=Zc((w-4)/62); apply(); }
+
+/* ---- ピンチで表そのものを拡大縮小する（指を狭めるほど俯瞰できる） ---- */
+function pd(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY;
+  return Math.sqrt(dx*dx+dy*dy); }
+var PZ=null;
+(function(){
+  var f=document.getElementById('feed');
+  f.addEventListener('touchstart',function(ev){
+    if(ev.touches.length===2) PZ={d:pd(ev.touches)||1,f:fs};
+  },{passive:false});
+  f.addEventListener('touchmove',function(ev){
+    if(PZ&&PZ.d&&ev.touches.length===2){
+      ev.preventDefault();
+      fs=Zc(PZ.f*(pd(ev.touches)/PZ.d));
+      apply(true);
+    }
+  },{passive:false});
+  function end(ev){ if(PZ&&ev.touches.length<2){ PZ=null; LS(KEY.f,fs); } }
+  f.addEventListener('touchend',end);
+  f.addEventListener('touchcancel',end);
+  /* iOS Safari はピンチを gesture イベントで投げてくる */
+  f.addEventListener('gesturestart',function(ev){ ev.preventDefault(); PZ={f:fs}; });
+  f.addEventListener('gesturechange',function(ev){ ev.preventDefault();
+    if(PZ) { fs=Zc(PZ.f*(ev.scale||1)); apply(true); } });
+  f.addEventListener('gestureend',function(ev){ ev.preventDefault(); PZ=null; LS(KEY.f,fs); });
+  /* PCは Ctrl+ホイール（トラックパッドのピンチもこれで来る） */
+  f.addEventListener('wheel',function(ev){
+    if(!ev.ctrlKey) return;
+    ev.preventDefault();
+    fs=Zc(fs*(ev.deltaY>0?0.9:1.11)); apply();
+  },{passive:false});
+})();
 function Clamp(){ var r=document.getElementById('rows'),b=document.getElementById('bClamp');
   if(r.classList.contains('clamp')){r.classList.remove('clamp');b.textContent='開';b.className='on';}
   else{r.classList.add('clamp');b.textContent='畳';b.className='';} }
