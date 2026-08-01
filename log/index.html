@@ -267,7 +267,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v15';
+var BUILD='v16';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -361,7 +361,7 @@ function parse(a,text){
     var f=((b.split('###F###')[1]||'').split('###O###')[0]||'').trim();
     var o=((b.split('###O###')[1]||'').split('###E###')[0]||'').trim();
     if(!t&&!o) return;
-    out.push({id:'e'+Date.now()+Math.random().toString(36).slice(2,6),d:d,t:t,
+    out.push({id:'e'+Date.now()+Math.random().toString(36).slice(2,6),d:d,t:t,u:Date.now(),
               tag:g?g.split(/[,、]/).map(function(x){return x.trim();}).filter(Boolean):[],org:o,raw:''});
     marks.push(f);
   });
@@ -425,7 +425,7 @@ function all(){ return MEM.concat(SEED); }
 function save(a){ MEM=a; persist(); }
 /* 1件だけゴミ箱に入れる（今はボタンを置いてない。消すのは必ずゴミ箱経由） */
 function del(id,ev){ if(ev) ev.stopPropagation();
-  var e=ent(id); if(!e) return; e.z=1;
+  var e=ent(id); if(!e) return; e.z=1; e.u=Date.now();
   persist(); draw(); tags(); colbar(); trCnt(); pushSoon(); }
 
 /* ---- 端末内：IndexedDB ---- */
@@ -486,11 +486,16 @@ function ghPut(data,sha){
   });
 }
 
-/* 両方を混ぜる。IDが同じものは1つに。消したIDは落とす。 */
+/* 両方を混ぜる。IDが同じものは「あとで触った方」を採る。消したIDは落とす。
+   u＝そのブロックを最後にいじった時刻。これが無いと、色を付けてない端末の
+   古いコピーが、色を付けた端末のコピーを上書きして消してしまう。 */
 function mix(a,b,del){
-  var seen={}, out=[], i, L=[a||[],b||[]];
+  var at={}, out=[], i, L=[a||[],b||[]];
   for(var n=0;n<2;n++) for(i=0;i<L[n].length;i++){
-    var e=L[n][i]; if(!e||!e.id||seen[e.id]) continue; seen[e.id]=1; out.push(e);
+    var e=L[n][i]; if(!e||!e.id) continue;
+    var p=at[e.id];
+    if(p===undefined){ at[e.id]=out.length; out.push(e); continue; }
+    if((e.u||0)>(out[p].u||0)) out[p]=e;   /* あとで触った方が勝つ */
   }
   if(del&&del.length) out=out.filter(function(e){ return del.indexOf(e.id)<0; });
   out.sort(function(x,y){
@@ -641,7 +646,7 @@ function palClose(){
 function setC(ev,id,c){
   if(ev) ev.stopPropagation();
   var e=ent(id); if(!e) return;
-  e.c=c; persist(); pushSoon(); colbar(); palClose();
+  e.c=c; e.u=Date.now(); persist(); pushSoon(); colbar(); palClose();
   var row=document.querySelector('.row[data-id="'+id+'"]');
   if(row){
     row.className='row'+(c?' k-'+c:'')+(row.classList.contains('open')?' open':'');
@@ -690,7 +695,7 @@ function selClear(){ SEL={}; selCnt(); draw(); }
 function selColor(k){
   var ids=selIds(); if(!ids.length) return;
   var L=all();
-  L.forEach(function(e){ if(ids.indexOf(e.id)>=0) e.c=k; });
+  L.forEach(function(e){ if(ids.indexOf(e.id)>=0){ e.c=k; e.u=Date.now(); } });
   persist(); pushSoon(); colbar(); draw();
 }
 
@@ -714,7 +719,7 @@ function trCnt(){ var n=0; all().forEach(function(e){ if(e.z) n++; });
 
 function setZ(v){
   var ids=selIds(); if(!ids.length) return;
-  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ if(v) e.z=1; else delete e.z; } });
+  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ if(v) e.z=1; else delete e.z; e.u=Date.now(); } });
   SEL={}; persist(); pushSoon(); draw(); tags(); colbar(); trCnt(); selCnt();
 }
 function toTrash(){ setZ(1); }
