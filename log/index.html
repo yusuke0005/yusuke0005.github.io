@@ -10,37 +10,38 @@
      infinite animation なし / backdrop-filter なし
      filter:drop-shadow なし / 大きな blur 影なし
      requestAnimationFrame ループなし / 外部CDNなし
-     固定表示は flex の3段組（上バー / 流れる本体 / 下入力）で作る
+     固定表示は flex で作る（左レール / 右本体＝流れる本体＋下入力）
+     flex の子には min-height:0 を必ず付ける（無いとAndroidで入力欄が画面外に落ちる）
      ============================================================ -->
 <style>
   *{box-sizing:border-box;-webkit-text-size-adjust:none}
   html,body{margin:0;padding:0;height:100%;background:#f4f4f2;color:#16150f}
   body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
-       display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+       display:flex;flex-direction:row;height:100vh;height:100dvh;overflow:hidden}
 
-  /* ---- 上：ずっと出しっぱなし ---- */
-  .top{flex:0 0 auto;background:#26251b;color:#f4f4f2}
-  .bar{padding:6px 8px;font-size:13px;line-height:1.5}
-  .bar .grp{display:inline-block;margin-right:12px;white-space:nowrap}
-  .bar b{font-weight:600;opacity:.5;margin-right:5px;font-size:11px;letter-spacing:.04em}
-  .bar button{font:inherit;font-size:13px;background:#3a382c;color:#f4f4f2;border:0;border-radius:3px;
-              padding:4px 10px;margin-right:3px;cursor:pointer;-webkit-appearance:none}
-  .bar button.on{background:#c8a03c;color:#16150f}
-  .bar .cnt{opacity:.5;font-size:12px}
-  .tagbar{background:#313023;padding:5px 8px}
-  .tagbar button{font-size:12px;padding:3px 8px;margin:2px 3px 2px 0;background:#3a382c;color:#e8e6dc;
-                 border:0;border-radius:11px;cursor:pointer;-webkit-appearance:none}
-  .tagbar button.on{background:#c8a03c;color:#16150f}
-  .cfg{background:#313023;padding:0 8px 6px;color:#8a8775;font-size:12px}
-  .cfg input{font:inherit;font-size:13px;background:#26251b;color:#e8e6dc;border:1px solid #3a382c;
-             border-radius:3px;padding:5px 7px;margin:4px 6px 0 0;-webkit-appearance:none}
-  .cfg input.k{width:min(100%,320px)}
-  .cfg button{font:inherit;font-size:12px;background:#3a382c;color:#e8e6dc;border:0;border-radius:3px;
-              padding:5px 10px;margin:4px 4px 0 0;cursor:pointer;-webkit-appearance:none}
-  .cfg summary{cursor:pointer;padding:5px 0}
+  /* ---- 左：縦の操作レール。閉じてれば44px、開くと200px ---- */
+  .rail{flex:0 0 44px;width:44px;background:#26251b;color:#f4f4f2;overflow-y:auto;overflow-x:hidden;
+        display:flex;flex-direction:column;min-height:0}
+  .rail.open{flex:0 0 200px;width:200px}
+  .rail button{font:inherit;font-size:11px;line-height:1.3;background:#3a382c;color:#f4f4f2;border:0;
+               border-radius:3px;padding:6px 2px;margin:3px;cursor:pointer;-webkit-appearance:none;
+               display:block;width:calc(100% - 6px);text-align:center}
+  .rail button.on{background:#c8a03c;color:#16150f}
+  .rail .cnt{font-size:10px;opacity:.5;text-align:center;padding:4px 2px}
+  .rail .sp{height:8px}
+  .panel{display:none;padding:4px 6px 10px;font-size:12px;color:#8a8775;border-top:1px solid #3a382c;margin-top:6px}
+  .rail.open .panel{display:block}
+  .panel h4{margin:8px 0 3px;font-size:10px;letter-spacing:.06em;color:#6b6957;font-weight:600}
+  .panel input{font:inherit;font-size:13px;background:#1d1c14;color:#e8e6dc;border:1px solid #3a382c;
+               border-radius:3px;padding:5px 6px;margin:3px 0;width:100%;-webkit-appearance:none}
+  .panel button{width:calc(100% - 6px)}
+  .panel .tg button{border-radius:11px;text-align:left;padding:5px 8px}
+  .panel .msg{font-size:11px;line-height:1.5;word-break:break-all;margin-top:6px;max-height:26vh;overflow:auto}
 
-  /* ---- 中：ここだけスクロールする。下が最新 ---- */
-  .feed{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+  /* ---- 右：本体 ---- */
+  .main{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column}
+  /* min-height:0 が無いとAndroidで中身がはみ出して下の入力欄が画面外に落ちる */
+  .feed{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch}
 
   /* ---- 表。font-size 1本で全部が比例して拡大縮小する ---- */
   #zoom,#zhead{font-size:16px}
@@ -95,56 +96,58 @@
 </head>
 <body>
 
-<!-- ============ 上：固定 ============ -->
-<div class="top">
-  <div class="bar">
-    <span class="grp"><b>ZOOM</b>
-      <button onclick="Z(-1)">−</button><button onclick="Z(1)">＋</button><button onclick="Zfit()">全体</button>
-    </span>
-    <span class="grp"><b>本文</b><button id="bClamp" onclick="Clamp()">たたむ</button></span>
-    <span class="grp"><button onclick="toBottom()">最新へ</button></span>
-    <span class="grp cnt" id="cnt"></span>
+<!-- ============ 左：操作レール（閉じて44px / 開いて200px） ============ -->
+<div class="rail" id="rail">
+  <button id="rt" onclick="railT()">☰</button>
+  <div class="sp"></div>
+  <button onclick="Z(-1)">−</button>
+  <button onclick="Z(1)">＋</button>
+  <button onclick="Zfit()">全</button>
+  <div class="sp"></div>
+  <button id="bClamp" onclick="Clamp()">畳</button>
+  <button onclick="toBottom()">↓</button>
+  <div class="cnt" id="cnt"></div>
+
+  <div class="panel">
+    <h4>タグ</h4>
+    <div class="tg" id="tagbar"></div>
+    <h4>設定</h4>
+    <input id="key" type="password" placeholder="APIキー">
+    <input id="mdl" placeholder="モデル">
+    <button onclick="saveCfg()">保存</button>
+    <button onclick="models()">使えるモデル</button>
+    <button onclick="test()">テスト</button>
+    <button onclick="dump()">全部をJSONでコピー</button>
+    <div class="msg" id="cst"></div>
   </div>
-  <div class="tagbar" id="tagbar"></div>
-  <div class="cfg">
-    <details id="cfg">
-      <summary>設定 / 書き出し</summary>
-      <div>
-        <input class="k" id="key" type="password" placeholder="APIキー（この端末にだけ保存される）">
-        <input id="mdl" placeholder="モデル">
-        <button onclick="saveCfg()">保存</button>
-        <button onclick="models()">使えるモデル</button>
-        <button onclick="test()">テスト</button>
-        <button onclick="dump()">全部をJSONでコピー</button>
-        <span id="cst"></span>
+</div>
+
+<!-- ============ 右：本体（流れる本体＋下入力） ============ -->
+<div class="main">
+
+  <div class="feed" id="feed">
+    <div id="zoom">
+      <div id="zhead">
+        <div class="head">
+          <div class="c-date">日付</div><div class="c-title">タイトル</div>
+          <div class="c-org">整理</div><div class="c-raw">言語化（原文）</div>
+        </div>
       </div>
-    </details>
-  </div>
-  <div id="zhead">
-    <div class="head">
-      <div class="c-date">日付</div><div class="c-title">タイトル</div>
-      <div class="c-org">整理</div><div class="c-raw">言語化（原文）</div>
+      <div class="sheet">
+        <div class="rows clamp" id="rows"></div>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- ============ 中：流れる。下が最新 ============ -->
-<div class="feed" id="feed">
-  <div id="zoom">
-    <div class="sheet">
-      <div class="rows clamp" id="rows"></div>
+  <div class="in">
+    <div class="prev" id="prev" style="display:none"></div>
+    <div class="inrow">
+      <textarea id="src" placeholder="ここに喋る。音声入力でそのまま流し込んでいい。話題が何個混ざっててもいい。"></textarea>
+      <button class="send" id="btn" onclick="run()">整理</button>
     </div>
+    <span class="st" id="st"></span>
   </div>
-</div>
 
-<!-- ============ 下：固定 ============ -->
-<div class="in">
-  <div class="prev" id="prev" style="display:none"></div>
-  <div class="inrow">
-    <textarea id="src" placeholder="ここに喋る。音声入力でそのまま流し込んでいい。話題が何個混ざっててもいい。"></textarea>
-    <button class="send" id="btn" onclick="run()">整理</button>
-  </div>
-  <span class="st" id="st"></span>
 </div>
 
 <script>
@@ -186,7 +189,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v5';
+var BUILD='v6';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -240,7 +243,7 @@ function run(){
   var text=document.getElementById('src').value.trim();
   var key=LS(KEY.k), mdl=LS(KEY.m)||defMdl();
   if(!text) return;
-  if(!key){ document.getElementById('cfg').open=true; st('先に設定でAPIキーを入れて'); return; }
+  if(!key){ railOpen(); st('先に設定でAPIキーを入れて'); return; }
   var btn=document.getElementById('btn'), pv=document.getElementById('prev');
   btn.disabled=true; st('整理中…'); pv.style.display='block'; pv.textContent='';
   var t0=Date.now(), acc='';
@@ -300,7 +303,7 @@ function st(s){document.getElementById('st').textContent=s;}
 /* 短い文で往復だけ試す（どのモードが通るか調べる） */
 function test(){
   var key=LS(KEY.k), mdl=LS(KEY.m)||defMdl(), c=document.getElementById('cst'), out='';
-  document.getElementById('cfg').open=true;
+  railOpen();
   if(!key){ c.textContent=' 先にキーを保存して'; return; }
   function t(mode){
     c.textContent=' '+BUILD+' mode'+mode+' 試し中…';
@@ -317,7 +320,7 @@ function test(){
 /* 使えるモデル名を一覧する（Google用。モデル名が分からないときの逃げ道） */
 function models(){
   var key=LS(KEY.k), c=document.getElementById('cst');
-  document.getElementById('cfg').open=true;
+  railOpen();
   if(!key){ c.textContent=' 先にキーを保存して'; return; }
   if(isAnth(key)){ c.textContent=' Claude: claude-sonnet-4-5 / claude-haiku-4-5 / claude-opus-4-1'; return; }
   c.textContent=' 取得中…';
@@ -411,10 +414,19 @@ var fs=16;
 function apply(){ document.getElementById('zoom').style.fontSize=fs+'px';
                   document.getElementById('zhead').style.fontSize=fs+'px'; LS(KEY.f,fs); }
 function Z(d){ fs=Math.max(5,Math.min(30,fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2)))); apply(); }
-function Zfit(){ fs=Math.max(5,Math.min(20,(window.innerWidth-4)/62)); apply(); }
+function Zfit(){ var f=document.getElementById('feed');
+  var w=(f&&f.clientWidth)||window.innerWidth;
+  fs=Math.max(5,Math.min(20,(w-4)/62)); apply(); }
 function Clamp(){ var r=document.getElementById('rows'),b=document.getElementById('bClamp');
-  if(r.classList.contains('clamp')){r.classList.remove('clamp');b.textContent='たたむ解除中';b.className='on';}
-  else{r.classList.add('clamp');b.textContent='たたむ';b.className='';} }
+  if(r.classList.contains('clamp')){r.classList.remove('clamp');b.textContent='開';b.className='on';}
+  else{r.classList.add('clamp');b.textContent='畳';b.className='';} }
+
+/* ============ 左レールの開閉 ============ */
+function railT(){ var r=document.getElementById('rail');
+  r.classList.toggle('open');
+  document.getElementById('rt').textContent = r.classList.contains('open')?'✕':'☰'; }
+function railOpen(){ var r=document.getElementById('rail');
+  if(!r.classList.contains('open')) railT(); }
 
 /* ============ 起動 ============ */
 document.getElementById('mdl').value=LS(KEY.m)||defMdl();
