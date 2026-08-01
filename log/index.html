@@ -43,7 +43,9 @@
   /* min-height:0 が無いとAndroidで中身がはみ出して下の入力欄が画面外に落ちる */
   .feed{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;
        touch-action:pan-x pan-y}
-  /* touch-action:pan-x pan-y ＝ スクロールは残してピンチだけ自前で拾う */
+  .feed #zoom,.feed .sheet,.feed .rows,.feed .row,.feed .row>div{touch-action:pan-x pan-y}
+  /* touch-action:pan-x pan-y ＝ スクロールは残してピンチだけ自前で拾う。
+     Android は子要素にも効かせないとブラウザ側のピンチに持っていかれる */
 
   /* ---- 表。font-size 1本で全部が比例して拡大縮小する ---- */
   #zoom,#zhead{font-size:16px}
@@ -198,7 +200,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v8';
+var BUILD='v9';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -541,42 +543,67 @@ function apply(nosave){ document.getElementById('zoom').style.fontSize=fs+'px';
                   document.getElementById('zhead').style.fontSize=fs+'px';
                   if(!nosave) LS(KEY.f,fs); }
 function Zc(v){ return Math.max(ZMIN,Math.min(ZMAX,v)); }
-function Z(d){ fs=Zc(fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2))); apply(); }
+function Z(d){ zoomAt(fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2))); }
 function Zfit(){ var f=document.getElementById('feed');
   var w=(f&&f.clientWidth)||window.innerWidth;
   fs=Zc((w-4)/62); apply(); }
 
-/* ---- ピンチで表そのものを拡大縮小する（指を狭めるほど俯瞰できる） ---- */
+/* ---- ピンチで表そのものを拡大縮小する（指の位置を起点にする） ---- */
 function pd(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY;
   return Math.sqrt(dx*dx+dy*dy); }
+function pm(t){ return {x:(t[0].clientX+t[1].clientX)/2, y:(t[0].clientY+t[1].clientY)/2}; }
+
+/* 指（またはカーソル）の下にある一点が動かないように、スクロール位置も一緒にずらす */
+function zoomAt(nf,cx,cy,nosave){
+  var f=document.getElementById('feed'), r=f.getBoundingClientRect();
+  var px=(cx==null? r.width/2 : cx-r.left), py=(cy==null? r.height/2 : cy-r.top);
+  nf=Zc(nf); var k=nf/fs;
+  var sx=(f.scrollLeft+px)*k-px, sy=(f.scrollTop+py)*k-py;
+  fs=nf; apply(nosave);
+  f.scrollLeft=Math.max(0,sx); f.scrollTop=Math.max(0,sy);
+}
+
 var PZ=null;
 (function(){
   var f=document.getElementById('feed');
-  f.addEventListener('touchstart',function(ev){
-    if(ev.touches.length===2) PZ={d:pd(ev.touches)||1,f:fs};
-  },{passive:false});
-  f.addEventListener('touchmove',function(ev){
+  function inFeed(t){ while(t){ if(t===f) return true; t=t.parentNode; } return false; }
+
+  /* document で捕まえる（Androidで子要素に取られるのを防ぐ） */
+  document.addEventListener('touchstart',function(ev){
+    if(ev.touches.length===2&&inFeed(ev.target)){
+      var m=pm(ev.touches);
+      PZ={d:pd(ev.touches)||1,f:fs,x:m.x,y:m.y};
+    }
+  },{passive:false,capture:true});
+
+  document.addEventListener('touchmove',function(ev){
     if(PZ&&PZ.d&&ev.touches.length===2){
       ev.preventDefault();
-      fs=Zc(PZ.f*(pd(ev.touches)/PZ.d));
-      apply(true);
+      var m=pm(ev.touches);
+      zoomAt(PZ.f*(pd(ev.touches)/PZ.d),m.x,m.y,true);
     }
-  },{passive:false});
-  function end(ev){ if(PZ&&ev.touches.length<2){ PZ=null; LS(KEY.f,fs); } }
-  f.addEventListener('touchend',end);
-  f.addEventListener('touchcancel',end);
+  },{passive:false,capture:true});
+
+  function end(ev){ if(PZ&&(!ev.touches||ev.touches.length<2)){ PZ=null; LS(KEY.f,fs); } }
+  document.addEventListener('touchend',end,true);
+  document.addEventListener('touchcancel',end,true);
+
   /* iOS Safari はピンチを gesture イベントで投げてくる */
-  f.addEventListener('gesturestart',function(ev){ ev.preventDefault(); PZ={f:fs}; });
+  f.addEventListener('gesturestart',function(ev){ ev.preventDefault();
+    PZ={f:fs,x:ev.clientX,y:ev.clientY}; });
   f.addEventListener('gesturechange',function(ev){ ev.preventDefault();
-    if(PZ) { fs=Zc(PZ.f*(ev.scale||1)); apply(true); } });
+    if(PZ) zoomAt(PZ.f*(ev.scale||1),
+                  (ev.clientX!=null?ev.clientX:PZ.x),(ev.clientY!=null?ev.clientY:PZ.y),true); });
   f.addEventListener('gestureend',function(ev){ ev.preventDefault(); PZ=null; LS(KEY.f,fs); });
-  /* PCは Ctrl+ホイール（トラックパッドのピンチもこれで来る） */
+
+  /* PC：Ctrl+ホイール、トラックパッドのピンチ、どちらもカーソル位置を起点にする */
   f.addEventListener('wheel',function(ev){
-    if(!ev.ctrlKey) return;
+    if(!ev.ctrlKey&&!ev.metaKey) return;
     ev.preventDefault();
-    fs=Zc(fs*(ev.deltaY>0?0.9:1.11)); apply();
+    zoomAt(fs*(ev.deltaY>0?0.9:1.11),ev.clientX,ev.clientY);
   },{passive:false});
 })();
+
 function Clamp(){ var r=document.getElementById('rows'),b=document.getElementById('bClamp');
   if(r.classList.contains('clamp')){r.classList.remove('clamp');b.textContent='開';b.className='on';}
   else{r.classList.add('clamp');b.textContent='畳';b.className='';} }
