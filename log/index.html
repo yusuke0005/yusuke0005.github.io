@@ -352,7 +352,7 @@ var PDAY =
 FMT;
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v26';
+var BUILD='v27';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -519,7 +519,7 @@ function test(){
       LS(ntKey(mdl),mode); done.push('OK '+mdl+' [mode'+mode+'] '+out.slice(0,20));
     }).catch(function(e){
       if(mode<2) return one(mdl,mode+1);
-      done.push('NG '+mdl+' '+e.message.slice(0,80));
+      done.push('NG '+mdl+' '+e.message.slice(0,400));
     });
   }
   ms.reduce(function(p,mdl){ return p.then(function(){ return one(mdl,0); }); },Promise.resolve())
