@@ -205,7 +205,8 @@
     <div class="tg" id="starbar"></div>
     <h4>設定</h4>
     <input id="key" type="password" placeholder="APIキー">
-    <input id="mdl" placeholder="モデル">
+    <input id="mdl" placeholder="ふだんのモデル（安いほう）">
+    <input id="mdl2" placeholder="まとめ用モデル（賢いほう）">
     <button onclick="saveCfg()">保存</button>
     <button onclick="models()">使えるモデル</button>
     <button onclick="test()">テスト</button>
@@ -277,13 +278,23 @@ var SEED = [
   raw:"そっか。Notionのデータベースだと、それが表になっていかないんだな。だからやっぱりいいわ。自作で作ったノートアプリに全部溜めていこう。\niPhoneとかで見たときも、PCと同じような感じで見たい。俯瞰して見たいから、ズームイン・ズームアウトできるような感じにしてほしい。とにかく俯瞰して見たいんだ。Notionとかだと俯瞰できないからさ、そういう設計になってんじゃん。あれが俺、許せないから。\nあと、カード形式にするにしても、余白はあんまつけないでほしい。ちゃんと繋がってる感は出したいから。" }
 ];
 
-var KEY={k:'log_key',m:'log_mdl',e:'log_entries',f:'log_fs',nt:'log_nothink',
+var KEY={k:'log_key',m:'log_mdl',m2:'log_mdl2',e:'log_entries',f:'log_fs',nt:'log_nothink',
          gt:'log_gh_token',gr:'log_gh_repo',dr:'log_draft'};
-var DEF_A='claude-sonnet-4-5';      /* Anthropic のとき */
-var DEF_G='gemini-flash-latest';    /* Google のとき */
+/* モデルは2つ持つ。ふだんの整理は安いほう、まとめみたいに頭を使うところだけ賢いほう。
+   「-latest」で終わる名前は世代が上がると勝手に乗り換わって値段が変わるので、番号で固定する。 */
+var DEF_A='claude-haiku-4-5';       /* Anthropic・ふだん */
+var DEF_A2='claude-sonnet-4-5';     /* Anthropic・まとめ */
+var DEF_G='gemini-2.5-flash';       /* Google・ふだん */
+var DEF_G2='gemini-2.5-pro';        /* Google・まとめ */
 function LS(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
 function isAnth(k){ return String(k||'').indexOf('sk-ant')===0; }
 function defMdl(){ return isAnth(LS(KEY.k))?DEF_A:DEF_G; }
+function defMdl2(){ return isAnth(LS(KEY.k))?DEF_A2:DEF_G2; }
+/* 使うモデル名。heavy＝まとめ側。まとめ側が空なら、ふだんのほうを使う（増やす前と同じ動き） */
+function mdlOf(heavy){
+  if(heavy) return LS(KEY.m2)||LS(KEY.m)||defMdl2();
+  return LS(KEY.m)||defMdl();
+}
 
 /* ============ プロンプト ============ */
 /* 整理本文の書式（P と PSPLIT で共通） */
@@ -341,7 +352,7 @@ var PDAY =
 FMT;
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v25';
+var BUILD='v26';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -392,8 +403,9 @@ function stream(key,mdl,prompt,mode,onDelta){
 
 /* ============ 実行 ============
    AIに投げる口はここ1つ。整理も分割も連結も、渡すプロンプトが違うだけ。 */
-function ask(pr,text,label,ok){
-  var key=LS(KEY.k), mdl=LS(KEY.m)||defMdl();
+/* heavy=true でまとめ用の賢いモデルを使う。ふだんは安いほう */
+function ask(pr,text,label,ok,heavy){
+  var key=LS(KEY.k), mdl=mdlOf(heavy);
   if(!text) return;
   if(!key){ railOpen(); st('先に設定でAPIキーを入れて'); return; }
   var btn=document.getElementById('btn'), pv=document.getElementById('prev');
@@ -403,13 +415,13 @@ function ask(pr,text,label,ok){
   function go(mode){
     acc=''; pv.textContent='';
     return stream(key,mdl,pr+"\n----\n"+text,mode,delta).then(function(){
-      LS(KEY.nt,mode);
+      LS(ntKey(mdl),mode);
       /* ここで落ちたのを通信エラーと混ぜない。原因が分からなくなるから */
       try{ ok(acc,t0); }
       catch(err){ st('処理エラー['+BUILD+']: '+err.message); btn.disabled=false; }
     }).catch(function(e){
       if(!isAnth(key)&&e.code===400&&mode<2){ st('別のやり方で再送…'); return go(mode+1); }
-      if(e.code===429){ st('今日の無料枠を使い切った。日付が変わるまで待つか、軽いモデルに変えるか、キーを変えて');
+      if(e.code===429){ st('回数制限（429）。無料枠なら日付が変わるまで待つ。有料なら投げすぎか残高切れ');
         pv.style.display='none'; btn.disabled=false; return; }
       var m='エラー['+BUILD+'/mode'+mode+']: '+e.message;
       st(m); pv.style.display='block'; pv.textContent=m+"\n\n（この文をそのままコピーして貼ってくれ）";
@@ -417,9 +429,12 @@ function ask(pr,text,label,ok){
       if(!isAnth(key)&&(e.code===404||e.code===400)) models();
     });
   }
-  var m=parseInt(LS(KEY.nt),10); if(isNaN(m)) m=0;
+  var m=parseInt(LS(ntKey(mdl)),10); if(isNaN(m)) m=0;
   go(m);
 }
+/* 「どの投げ方が通ったか」はモデルごとに違う（思考を切れないモデルがある）。
+   1つの場所に覚えると、モデルを分けたときに片方の都合がもう片方に移ってしまう。 */
+function ntKey(mdl){ return KEY.nt+':'+mdl; }
 function endAsk(){ document.getElementById('btn').disabled=false;
   document.getElementById('prev').style.display='none'; }
 
@@ -490,21 +505,25 @@ function parse(a,text){
 function p2(n){return n<10?'0'+n:''+n;}
 function st(s){document.getElementById('st').textContent=s;}
 
-/* 短い文で往復だけ試す（どのモードが通るか調べる） */
+/* 短い文で往復だけ試す（どのモードが通るか調べる）。
+   モデルを2つ持つようにしたので、両方まとめて試す。 */
 function test(){
-  var key=LS(KEY.k), mdl=LS(KEY.m)||defMdl(), c=document.getElementById('cst'), out='';
+  var key=LS(KEY.k), c=document.getElementById('cst');
   railOpen();
   if(!key){ c.textContent=' 先にキーを保存して'; return; }
-  function t(mode){
-    c.textContent=' '+BUILD+' mode'+mode+' 試し中…';
+  var a=mdlOf(false), b=mdlOf(true), ms=(a===b)?[a]:[a,b], done=[];
+  function one(mdl,mode){
+    var out='';
+    c.textContent=' '+BUILD+' '+mdl+' mode'+mode+' 試し中…';
     return stream(key,mdl,'1+1は？数字だけ答えて。',mode,function(x){out+=x;}).then(function(){
-      LS(KEY.nt,mode); c.textContent=' OK ['+BUILD+'/mode'+mode+'] 返答:'+out.slice(0,40);
+      LS(ntKey(mdl),mode); done.push('OK '+mdl+' [mode'+mode+'] '+out.slice(0,20));
     }).catch(function(e){
-      if(mode<2) return t(mode+1);
-      c.textContent=' 全部NG ['+BUILD+'] '+e.message;
+      if(mode<2) return one(mdl,mode+1);
+      done.push('NG '+mdl+' '+e.message.slice(0,80));
     });
   }
-  t(0);
+  ms.reduce(function(p,mdl){ return p.then(function(){ return one(mdl,0); }); },Promise.resolve())
+    .then(function(){ c.textContent=' ['+BUILD+'] '+done.join(' / '); });
 }
 
 /* 使えるモデル名を一覧する（Google用。モデル名が分からないときの逃げ道） */
@@ -512,7 +531,7 @@ function models(){
   var key=LS(KEY.k), c=document.getElementById('cst');
   railOpen();
   if(!key){ c.textContent=' 先にキーを保存して'; return; }
-  if(isAnth(key)){ c.textContent=' Claude: claude-sonnet-4-5 / claude-haiku-4-5 / claude-opus-4-1'; return; }
+  if(isAnth(key)){ c.textContent=' Claude: claude-haiku-4-5（安い） / claude-sonnet-4-5 / claude-opus-4-1'; return; }
   c.textContent=' 取得中…';
   fetch('https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(key))
     .then(function(r){return r.json();})
@@ -680,13 +699,18 @@ function saveGh(){
 }
 
 function saveCfg(){
-  var k=document.getElementById('key').value.trim(), m=document.getElementById('mdl').value.trim();
+  var k=document.getElementById('key').value.trim(),
+      m=document.getElementById('mdl').value.trim(),
+      m2=document.getElementById('mdl2').value.trim();
   if(k) LS(KEY.k,k);
   LS(KEY.m,m||defMdl());
+  LS(KEY.m2,m2||defMdl2());
   document.getElementById('mdl').value=LS(KEY.m);
+  document.getElementById('mdl2').value=LS(KEY.m2);
   document.getElementById('key').value='';
   document.getElementById('key').placeholder='APIキー保存済み（変えるときだけ入力）';
-  document.getElementById('cst').textContent=' 保存した（'+(isAnth(LS(KEY.k))?'Claude':'Gemini')+'）';
+  document.getElementById('cst').textContent=' 保存した（'+(isAnth(LS(KEY.k))?'Claude':'Gemini')
+    +'）ふだん:'+LS(KEY.m)+' / まとめ:'+LS(KEY.m2);
 }
 function dump(){
   copy(JSON.stringify(load(),null,1));
@@ -1115,7 +1139,7 @@ function sumSep(ev,id){
     MEM.unshift(n); sortMem(); persist(); pushSoon();
     draw(); tags(); colbar(); trCnt(); endAsk();
     st(L.length+'件をまとめた / '+((Date.now()-t0)/1000).toFixed(1)+'秒');
-  });
+  },true);   /* まとめは頭を使うところなので賢いほうのモデルで投げる */
 }
 
 var active=null;
@@ -1306,7 +1330,11 @@ function Full(){
 function reload(){ LEAVE=true; location.replace(location.pathname+'?t='+Date.now()); }
 
 /* ============ 起動 ============ */
+/* 「-latest」で終わる名前は世代が上がると値段まで変わるので、番号つきに直しておく。
+   自分で別の名前を入れている場合は触らない。 */
+if((LS(KEY.m)||'').slice(-7)==='-latest') LS(KEY.m,defMdl());
 document.getElementById('mdl').value=LS(KEY.m)||defMdl();
+document.getElementById('mdl2').value=LS(KEY.m2)||defMdl2();
 if(LS(KEY.k)) document.getElementById('key').placeholder='APIキー保存済み（変えるときだけ入力）';
 document.getElementById('ghr').value=ghR();
 if(ghT()) document.getElementById('ght').placeholder='トークン保存済み（変えるときだけ入力）';
