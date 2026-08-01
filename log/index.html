@@ -107,6 +107,10 @@
   /* 5つ確実に入るように、星1つぶんの幅を決め打ちする。
      ★ の実際の字幅はフォント任せなので、幅を指定しないと端末によって5つ目がはみ出て消える。 */
   .tmx{display:block;color:#6b6957;font-weight:600;letter-spacing:.04em}
+  /* ---- 通し番号とリンク ---- */
+  .nox{display:block;margin-top:.25em;color:#9a9784;font-size:.8em;cursor:pointer}
+  .lk{color:#2f6fb0;border-bottom:1px solid #a8c6e4;cursor:pointer}
+  .row.hit{background:#fff3c4;transition:background .4s}
   .stx{display:block;margin-top:.3em;white-space:nowrap}
   .stx i{display:inline-block;width:1.02em;font-style:normal;font-size:.88em;line-height:1;
          text-align:center;color:#e2dfd0;cursor:pointer}
@@ -349,6 +353,7 @@ var PDAY =
 "必要なのは『その日、何について書いたのか』が一目で分かることです。\n\n"+
 "守ること：\n"+
 "・1行1件の箇条書きにする。1行は20〜40字。説明を足さない。\n"+
+"・各行のいちばん頭に、その話が書いてあるブロックの番号を #12 の形で付ける。材料の頭に書いてある番号をそのまま使う。番号を作らない。複数にまたがるなら #12 #15 のように並べる。\n"+
 "・書かれた話題は全部拾う。数が多くても落とさない。\n"+
 "・似た話題はまとめて見出しの下に並べる。見出しは中身から自分で作る（例：システムのアイデア／価値観／悩み／トレーニング）。3〜6個が目安。\n"+
 "・評価・励まし・助言・提案・感想は書かない。「明日やること」も書かない。\n"+
@@ -360,15 +365,15 @@ var PDAY =
 "**その日がどういう日だったかを一文で。太字にする**（例：システムのアイデアを大量に出した日）\n"+
 "\n"+
 "# 見出し\n"+
-"・何について書いたか（1行）\n"+
-"・何について書いたか（1行）\n"+
+"・#12 何について書いたか（1行）\n"+
+"・#15 何について書いたか（1行）\n"+
 "\n"+
 "# 見出し\n"+
-"・何について書いたか（1行）\n"+
+"・#18 何について書いたか（1行）\n"+
 "###E###\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v29';
+var BUILD='v30';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -594,7 +599,7 @@ function idbSet(k,v){ return new Promise(function(res){
   try{ var q=IDB.transaction('kv','readwrite').objectStore('kv').put(v,k);
     q.onsuccess=function(){ res(true); }; q.onerror=function(){ res(false); };
   }catch(e){ res(false); } }); }
-function persist(){ idbSet('entries',MEM); idbSet('del',DEL); }
+function persist(){ numAll(); idbSet('entries',MEM); idbSet('del',DEL); }
 
 /* ---- 本体：GitHub ---- */
 function ghT(){ return LS(KEY.gt)||''; }
@@ -755,7 +760,11 @@ function cp(ev,id,f){
 
 /* ============ 描画（古い順。いちばん下が最新） ============ */
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function ln(l){return l.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/==(.+?)==/g,'<mark>$1</mark>');}
+/* #12 と書いてあったら、そのブロックへのリンクにする。
+   見出しの「# 」は間に空白があるので、ここには引っかからない。 */
+function lk(l){ return l.replace(/#(\d{1,6})/g,
+  function(_,n){ return '<span class="lk" onclick="jump(event,'+n+')">#'+n+'</span>'; }); }
+function ln(l){return lk(l.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/==(.+?)==/g,'<mark>$1</mark>'));}
 function md(s){ return esc(s).split('\n').map(function(l){
   if(l.indexOf('# ')===0) return '<span class="h">'+ln(l.slice(2))+'</span>';
   if(l.indexOf('・')===0) return '<span class="li">'+ln(l)+'</span>';
@@ -924,6 +933,48 @@ function unTrash(){ setZ(0); }
 /* ============ 分割と連結 ============
    1回の入力＝1ブロックが基本。長すぎたら押して割る。切りすぎたら押して繋ぐ。
    どちらも元のブロックはゴミ箱に残す。消さない。 */
+/* ============ 通し番号 ============
+   まとめの箇条書きから元のブロックへ飛ぶために、ブロックに番号を振る。
+   一度振った番号は二度と変えない。消しても欠番のまま空ける。
+   詰め直すと、前に書いたまとめの「#12」が別のブロックを指すようになるから。
+   並び順とは何の関係もない。ただの名札。 */
+function msOf(e){ var m=String(e.id||'').match(/^[a-z](\d{13})/); return m?+m[1]:0; }
+function numAll(){
+  var mx=0, need=[];
+  MEM.forEach(function(e){
+    if(isSep(e)) return;
+    if(e.n>mx) mx=e.n;
+    if(!e.n) need.push(e);
+  });
+  if(!need.length) return 0;
+  need.sort(function(x,y){ return (msOf(x)-msOf(y))||String(x.id).localeCompare(String(y.id)); });
+  need.forEach(function(e){ e.n=++mx; e.u=Date.now(); });
+  return need.length;
+}
+
+/* #12 を押したらそのブロックまで飛ぶ。絞り込みで隠れていたら、先に絞りを外す */
+function jump(ev,n){
+  if(ev) ev.stopPropagation();
+  var L=all(), e=null;
+  for(var i=0;i<L.length;i++) if(L[i].n===n){ e=L[i]; break; }
+  if(!e){ st('#'+n+' は見つからない'); return; }
+  if(!!e.z!==!!TRASH){ st('#'+n+' は'+(e.z?'ゴミ箱の中':'ゴミ箱の外')+'にある'); return; }
+  var row=document.querySelector('.row[data-id="'+e.id+'"]');
+  if(!row){
+    active=null; activeC=null; activeS=null;
+    draw(); tags(); colbar();
+    row=document.querySelector('.row[data-id="'+e.id+'"]');
+  }
+  if(!row){ st('#'+n+' が出せない'); return; }
+  var f=document.getElementById('feed');
+  var r=row.getBoundingClientRect(), fr=f.getBoundingClientRect();
+  f.scrollTop += (r.top-fr.top) - f.clientHeight/3;
+  row.className+=' hit';
+  setTimeout(function(){ row.className=row.className.replace(/ hit/g,''); },1800);
+}
+/* 番号を押したらコピー。別のブロックに貼れば、そこからここへリンクが張れる */
+function cpNum(ev,n){ if(ev) ev.stopPropagation(); copy('#'+n); st('#'+n+' をコピーした'); }
+
 function sortMem(){
   MEM.sort(function(x,y){
     var c=String(y.d||'').localeCompare(String(x.d||''));
@@ -1138,7 +1189,7 @@ function sumSep(ev,id){
   /* 材料は整理本文のほうを使う。原文を全部足すと長くなりすぎて弾かれる */
   var src=L.map(function(e){
     var g=(e.tag||[]).join('・');
-    return '【'+(e.t||'')+'】'+(g?'（'+g+'）':'')+'\n'+(e.org||e.raw||'');
+    return '#'+(e.n||'?')+' 【'+(e.t||'')+'】'+(g?'（'+g+'）':'')+'\n'+(e.org||e.raw||'');
   }).join('\n\n----\n\n');
   ask(PDAY,src,L.length+'件をまとめ中…',function(acc,t0){
     var got=parse(acc,src);
@@ -1184,7 +1235,8 @@ function draw(){
     var stx='<span class="stx">'+[1,2,3,4,5].map(function(k){
       return '<i class="'+(k<=sv?'f':'')+'" onclick="setS(event,\''+e.id+'\','+k+')">★</i>'; }).join('')+'</span>';
     return '<div class="row'+(c?' k-'+c:'')+(sl?' sel':'')+'" data-id="'+e.id+'" onclick="rowTap(event,\''+e.id+'\',this)">'
-      +'<div class="c-date">'+esc(DM[e.id]||e.d)+'<span class="tmx">'+esc(tmOf(e))+'</span>'+stx+'</div>'
+      +'<div class="c-date">'+esc(DM[e.id]||e.d)+'<span class="tmx">'+esc(tmOf(e))+'</span>'+stx
+        +(e.n?'<span class="nox" onclick="cpNum(event,'+e.n+')">#'+e.n+'</span>':'')+'</div>'
       +'<div class="c-title">'+ck+B('t')
         +'<span class="ch'+(c?' ch-'+c:'')+'" onclick="palOpen(event,\''+e.id+'\')"></span>'+esc(e.t)
         +'<div class="tags">'+tg+B('g')+'</div></div>'
