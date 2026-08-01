@@ -110,6 +110,11 @@
       border:1px solid #ddd9c9;border-radius:2px;padding:0 .35em;margin:0 0 .2em .3em;
       cursor:pointer;-webkit-appearance:none}
   .cp.ok{background:#c8a03c;color:#16150f;border-color:#c8a03c}
+  /* 畳んでるとき、整理と原文の中身は -webkit-box になる。
+     その中で float:right を使うと iOS では横幅いっぱいに伸びてしまう。
+     だからこの2つのコピーボタンだけは float をやめて、右上に置いて場所を空ける。 */
+  .c-org,.c-raw{position:relative;padding-right:2.1em}
+  .c-org>.cp,.c-raw>.cp{position:absolute;float:none;top:.35em;right:.35em;margin:0;z-index:3}
   .cpt{float:none;display:inline-block;margin:0 0 .2em 0}
   .del{float:right;font-size:.8em;color:#c0392b;opacity:.3;padding:0 .2em;margin-left:.3em}
   .empty{padding:2em .8em;color:#8a8775;font-size:.85em;text-align:center;background:#fff}
@@ -268,7 +273,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v17';
+var BUILD='v18';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
