@@ -291,7 +291,7 @@ var PSPLIT =
 FMT;
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v19';
+var BUILD='v20';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -383,17 +383,41 @@ function done(acc,text,t0){
   st(got.length+'件 / '+((Date.now()-t0)/1000).toFixed(1)+'秒');
 }
 
+/* 目印のどれかが最初に出たところで切る。
+   プロンプトによって出る目印が違う（分割のときだけ ###F### が出る）ので、
+   「次に来る目印」を決め打ちにしない。決め打ちにすると、目印が無いときに
+   本文まるごとを拾ってしまう。v19のタグ崩れはこれが原因だった。 */
+function cut(s,marks){
+  s=s||'';
+  for(var i=0;i<marks.length;i++){ var p=s.indexOf(marks[i]); if(p>=0) s=s.slice(0,p); }
+  return s.trim();
+}
+/* タグを安全にする。改行を落とし、目印が混ざったら手前で切り、長すぎるものは捨てる */
+function fixTags(a){
+  if(!a) return [];
+  var out=[];
+  a.forEach(function(x){
+    x=String(x||'').split('###')[0].replace(/[\r\n]+/g,' ').trim();
+    if(!x||x.length>20) return;
+    if(out.indexOf(x)<0) out.push(x);
+  });
+  return out.slice(0,4);
+}
+function toTags(g){
+  return fixTags(String(g||'').split(/[,、\n]/).map(function(x){return x.trim();}));
+}
+
 function parse(a,text){
   var blocks=a.split('###T###').slice(1), out=[], marks=[];
   var today=new Date(), d=today.getFullYear()+'-'+p2(today.getMonth()+1)+'-'+p2(today.getDate());
   blocks.forEach(function(b){
-    var t=(b.split('###G###')[0]||'').trim();
-    var g=((b.split('###G###')[1]||'').split('###F###')[0]||'').trim();
-    var f=((b.split('###F###')[1]||'').split('###O###')[0]||'').trim();
+    var t=cut(b,['###G###','###F###','###O###','###E###']);
+    var g=cut((b.split('###G###')[1]||''),['###F###','###O###','###E###']);
+    var f=cut((b.split('###F###')[1]||''),['###O###','###E###']);
     var o=((b.split('###O###')[1]||'').split('###E###')[0]||'').trim();
     if(!t&&!o) return;
     out.push({id:'e'+Date.now()+Math.random().toString(36).slice(2,6),d:d,t:t,u:Date.now(),
-              tag:g?g.split(/[,、]/).map(function(x){return x.trim();}).filter(Boolean):[],org:o,raw:''});
+              tag:toTags(g),org:o,raw:''});
     marks.push(f);
   });
   /* 原文を話題ごとに切り分ける（モデルに原文を書き写させると遅いので、こちらで切る） */
@@ -807,7 +831,7 @@ function joinSel(){
     n.c=(L.filter(function(e){return e.c;})[0]||{}).c||'';
     var tg=[]; L.forEach(function(e){ (e.tag||[]).forEach(function(x){ if(tg.indexOf(x)<0) tg.push(x); }); });
     (n.tag||[]).forEach(function(x){ if(tg.indexOf(x)<0) tg.push(x); });
-    n.tag=tg.slice(0,4);
+    n.tag=fixTags(tg);
     trashIds(ids);
     MEM.unshift(n); sortMem(); SEL={}; persist(); pushSoon();
     draw(); tags(); colbar(); trCnt(); selCnt(); endAsk();
@@ -1016,12 +1040,24 @@ document.getElementById('ver').textContent=BUILD;
 var sv=LS(KEY.f); if(sv){ fs=parseFloat(sv); apply(); } else Zfit();
 toBottom();
 
+/* v19で壊れたタグ（###O###や整理本文まるごとがタグに入ったもの）の掃除。
+   起動のたびに走らせても、まともなタグには何も起きない。 */
+function scrubTags(){
+  var n=0;
+  MEM.forEach(function(e){
+    var a=e.tag||[]; var b=fixTags(a);
+    if(a.length!==b.length||a.join('')!==b.join('')){ e.tag=b; e.u=Date.now(); n++; }
+  });
+  if(n){ pushSoon(); st('壊れたタグを'+n+'件なおした'); }
+}
+
 idbOpen().then(function(){ return idbGet('entries'); }).then(function(v){
   if(v&&v.length){ MEM=v; }
   else{ try{ MEM=JSON.parse(LS(KEY.e)||'[]'); }catch(e){ MEM=[]; } }   /* 前のlocalStorageから引っ越し */
   return idbGet('del');
 }).then(function(d){
   DEL=d||[];
+  scrubTags();
   persist(); tags(); colbar(); trCnt(); draw(); toBottom();
   if(ghOn()) sync(true); else syst('GitHub未設定（この端末にだけ保存中）');
 });
