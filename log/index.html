@@ -281,11 +281,14 @@ var SEED = [
 var KEY={k:'log_key',m:'log_mdl',m2:'log_mdl2',e:'log_entries',f:'log_fs',nt:'log_nothink',
          gt:'log_gh_token',gr:'log_gh_repo',dr:'log_draft'};
 /* モデルは2つ持つ。ふだんの整理は安いほう、まとめみたいに頭を使うところだけ賢いほう。
-   「-latest」で終わる名前は世代が上がると勝手に乗り換わって値段が変わるので、番号で固定する。 */
-var DEF_A='claude-haiku-4-5';       /* Anthropic・ふだん */
-var DEF_A2='claude-sonnet-4-5';     /* Anthropic・まとめ */
-var DEF_G='gemini-2.5-flash';       /* Google・ふだん */
-var DEF_G2='gemini-2.5-pro';        /* Google・まとめ */
+   Google側は「-latest」の名前を使う。番号で固定すると、その世代が新規に閉じられた日に
+   404で全部止まる（2.5がそうなった）。-latest なら世代が上がってもそのまま通る。 */
+var DEF_A='claude-haiku-4-5';         /* Anthropic・ふだん */
+var DEF_A2='claude-sonnet-4-5';       /* Anthropic・まとめ */
+var DEF_G='gemini-flash-latest';      /* Google・ふだん */
+var DEF_G2='gemini-pro-latest';       /* Google・まとめ */
+/* もう叩けない世代。入っていたら起動時に今の名前へ寄せる */
+var DEAD=/^gemini-(1\.|2\.)/;
 function LS(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
 function isAnth(k){ return String(k||'').indexOf('sk-ant')===0; }
 function defMdl(){ return isAnth(LS(KEY.k))?DEF_A:DEF_G; }
@@ -352,7 +355,7 @@ var PDAY =
 FMT;
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v27';
+var BUILD='v28';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -1330,9 +1333,10 @@ function Full(){
 function reload(){ LEAVE=true; location.replace(location.pathname+'?t='+Date.now()); }
 
 /* ============ 起動 ============ */
-/* 「-latest」で終わる名前は世代が上がると値段まで変わるので、番号つきに直しておく。
-   自分で別の名前を入れている場合は触らない。 */
-if((LS(KEY.m)||'').slice(-7)==='-latest') LS(KEY.m,defMdl());
+/* 閉じられた世代（gemini-1.x / 2.x）が入っていたら、今の名前に寄せる。
+   そのままだと404で全部止まるので、黙って直したほうがいい。 */
+if(DEAD.test(LS(KEY.m)||'')) LS(KEY.m,defMdl());
+if(DEAD.test(LS(KEY.m2)||'')) LS(KEY.m2,defMdl2());
 document.getElementById('mdl').value=LS(KEY.m)||defMdl();
 document.getElementById('mdl2').value=LS(KEY.m2)||defMdl2();
 if(LS(KEY.k)) document.getElementById('key').placeholder='APIキー保存済み（変えるときだけ入力）';
