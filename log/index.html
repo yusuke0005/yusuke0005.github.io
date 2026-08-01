@@ -106,6 +106,7 @@
   <div class="sp"></div>
   <button id="bClamp" onclick="Clamp()">畳</button>
   <button onclick="toBottom()">↓</button>
+  <button onclick="sync()">⇅</button>
   <div class="cnt" id="cnt"></div>
 
   <div class="panel">
@@ -119,6 +120,11 @@
     <button onclick="test()">テスト</button>
     <button onclick="dump()">全部をJSONでコピー</button>
     <div class="msg" id="cst"></div>
+    <h4>GitHub（同期）</h4>
+    <input id="ghr" placeholder="yusuke0005/log-data">
+    <input id="ght" type="password" placeholder="GitHubトークン">
+    <button onclick="saveGh()">保存して同期</button>
+    <div class="msg" id="sy"></div>
   </div>
 </div>
 
@@ -158,7 +164,8 @@ var SEED = [
   raw:"そっか。Notionのデータベースだと、それが表になっていかないんだな。だからやっぱりいいわ。自作で作ったノートアプリに全部溜めていこう。\niPhoneとかで見たときも、PCと同じような感じで見たい。俯瞰して見たいから、ズームイン・ズームアウトできるような感じにしてほしい。とにかく俯瞰して見たいんだ。Notionとかだと俯瞰できないからさ、そういう設計になってんじゃん。あれが俺、許せないから。\nあと、カード形式にするにしても、余白はあんまつけないでほしい。ちゃんと繋がってる感は出したいから。" }
 ];
 
-var KEY={k:'log_key',m:'log_mdl',e:'log_entries',f:'log_fs',nt:'log_nothink'};
+var KEY={k:'log_key',m:'log_mdl',e:'log_entries',f:'log_fs',nt:'log_nothink',
+         gt:'log_gh_token',gr:'log_gh_repo'};
 var DEF_A='claude-sonnet-4-5';      /* Anthropic のとき */
 var DEF_G='gemini-flash-latest';    /* Google のとき */
 function LS(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
@@ -189,7 +196,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v6';
+var BUILD='v7';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -267,7 +274,7 @@ function done(acc,text,t0){
   if(!got.length){ st('形式が読めなかった。プレビューを見て'); document.getElementById('btn').disabled=false; return; }
   var cur=load();
   for(var i=got.length-1;i>=0;i--) cur.unshift(got[i]);   /* 保存は新しい順のまま */
-  save(cur); draw(); tags(); toBottom();
+  save(cur); draw(); tags(); toBottom(); pushSoon();
   document.getElementById('src').value='';
   document.getElementById('prev').style.display='none';
   document.getElementById('btn').disabled=false;
@@ -335,11 +342,128 @@ function models(){
     .catch(function(e){ c.textContent=' 取得失敗: '+e.message; });
 }
 
-/* ============ 保存 ============ */
-function load(){ try{ return JSON.parse(LS(KEY.e)||'[]'); }catch(e){ return []; } }
-function save(a){ LS(KEY.e,JSON.stringify(a)); }
-function all(){ return load().concat(SEED); }
-function del(id,ev){ ev.stopPropagation(); save(load().filter(function(x){return x.id!==id;})); draw(); tags(); }
+/* ============ 保存 ============
+   端末の中は IndexedDB（localStorage の 5MB 上限を回避）。
+   本体は GitHub のプライベートリポジトリ（data.json）。全端末で同じ中身になる。
+   ============================================================ */
+var MEM=[];      /* 手持ちのエントリ（新しい順） */
+var DEL=[];      /* 消したID。これが無いと他の端末から復活してくる */
+
+function load(){ return MEM; }
+function all(){ return MEM.concat(SEED); }
+function save(a){ MEM=a; persist(); }
+function del(id,ev){ ev.stopPropagation();
+  if(DEL.indexOf(id)<0) DEL.push(id);
+  MEM=MEM.filter(function(x){return x.id!==id;});
+  persist(); draw(); tags(); pushSoon(); }
+
+/* ---- 端末内：IndexedDB ---- */
+var IDB=null;
+function idbOpen(){ return new Promise(function(res){
+  try{ var r=indexedDB.open('log',1);
+    r.onupgradeneeded=function(){ r.result.createObjectStore('kv'); };
+    r.onsuccess=function(){ IDB=r.result; res(IDB); };
+    r.onerror=function(){ res(null); };
+  }catch(e){ res(null); } }); }
+function idbGet(k){ return new Promise(function(res){
+  if(!IDB) return res(null);
+  try{ var q=IDB.transaction('kv','readonly').objectStore('kv').get(k);
+    q.onsuccess=function(){ res(q.result===undefined?null:q.result); };
+    q.onerror=function(){ res(null); };
+  }catch(e){ res(null); } }); }
+function idbSet(k,v){ return new Promise(function(res){
+  if(!IDB) return res(false);
+  try{ var q=IDB.transaction('kv','readwrite').objectStore('kv').put(v,k);
+    q.onsuccess=function(){ res(true); }; q.onerror=function(){ res(false); };
+  }catch(e){ res(false); } }); }
+function persist(){ idbSet('entries',MEM); idbSet('del',DEL); }
+
+/* ---- 本体：GitHub ---- */
+function ghT(){ return LS(KEY.gt)||''; }
+function ghR(){ return (LS(KEY.gr)||'').replace(/^https?:\/\/github\.com\//,'').replace(/\/+$/,''); }
+function ghOn(){ return !!(ghT()&&ghR()); }
+function syst(s){ var e=document.getElementById('sy'); if(e) e.textContent=s; }
+
+function b64e(str){ var u=new TextEncoder().encode(str), b='';
+  for(var i=0;i<u.length;i+=0x8000) b+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));
+  return btoa(b); }
+function b64d(b){ var t=atob(String(b).replace(/\s/g,'')), u=new Uint8Array(t.length);
+  for(var i=0;i<t.length;i++) u[i]=t.charCodeAt(i);
+  return new TextDecoder().decode(u); }
+
+function ghHead(){ return {'authorization':'Bearer '+ghT(),
+  'accept':'application/vnd.github+json','x-github-api-version':'2022-11-28'}; }
+function ghUrl(){ return 'https://api.github.com/repos/'+ghR()+'/contents/data.json'; }
+
+function ghGet(){
+  return fetch(ghUrl()+'?t='+Date.now(),{headers:ghHead(),cache:'no-store'}).then(function(r){
+    if(r.status===404) return {data:{entries:[],del:[]},sha:null};   /* まだファイルが無い */
+    if(!r.ok) return r.text().then(function(b){ var e=new Error(r.status+' '+b.slice(0,160)); e.code=r.status; throw e; });
+    return r.json().then(function(j){
+      var d; try{ d=JSON.parse(b64d(j.content)); }catch(e){ d={entries:[],del:[]}; }
+      if(!d||!d.entries) d={entries:[],del:[]};
+      return {data:d,sha:j.sha};
+    });
+  });
+}
+function ghPut(data,sha){
+  var b={message:'log '+new Date().toISOString(),content:b64e(JSON.stringify(data))};
+  if(sha) b.sha=sha;
+  return fetch(ghUrl(),{method:'PUT',headers:ghHead(),body:JSON.stringify(b)}).then(function(r){
+    if(!r.ok) return r.text().then(function(t){ var e=new Error(r.status+' '+t.slice(0,160)); e.code=r.status; throw e; });
+    return r.json();
+  });
+}
+
+/* 両方を混ぜる。IDが同じものは1つに。消したIDは落とす。 */
+function mix(a,b,del){
+  var seen={}, out=[], i, L=[a||[],b||[]];
+  for(var n=0;n<2;n++) for(i=0;i<L[n].length;i++){
+    var e=L[n][i]; if(!e||!e.id||seen[e.id]) continue; seen[e.id]=1; out.push(e);
+  }
+  if(del&&del.length) out=out.filter(function(e){ return del.indexOf(e.id)<0; });
+  out.sort(function(x,y){
+    var c=String(y.d||'').localeCompare(String(x.d||''));
+    return c!==0?c:String(y.id).localeCompare(String(x.id));
+  });
+  return out;
+}
+
+var SY=false;
+function sync(quiet,retry){
+  if(!ghOn()){ if(!quiet){ railOpen(); syst('GitHubの設定がまだ'); } return Promise.resolve(); }
+  if(SY) return Promise.resolve();
+  SY=true; syst('同期中…');
+  return ghGet().then(function(g){
+    var rd=(g.data.del)||[];
+    var del=rd.concat(DEL.filter(function(x){ return rd.indexOf(x)<0; }));
+    var before=JSON.stringify({e:g.data.entries,d:rd});
+    var m=mix(MEM,g.data.entries,del);
+    MEM=m; DEL=del; persist(); draw(); tags();
+    if(JSON.stringify({e:MEM,d:DEL})===before){ syst('同期OK '+MEM.length+'件'); SY=false; return; }
+    return ghPut({entries:MEM,del:DEL},g.sha).then(function(){
+      syst('保存した '+MEM.length+'件'); SY=false;
+    });
+  }).catch(function(e){
+    SY=false;
+    if(e.code===409&&!retry) return sync(quiet,1);   /* 他の端末と衝突したら1回だけやり直す */
+    syst('同期エラー: '+e.message);
+    if(!quiet) railOpen();
+  });
+}
+var SYT=null;
+function pushSoon(){ if(!ghOn()) return; clearTimeout(SYT); SYT=setTimeout(function(){ sync(true); },1200); }
+
+function saveGh(){
+  var t=document.getElementById('ght').value.trim(), r=document.getElementById('ghr').value.trim();
+  if(t) LS(KEY.gt,t);
+  if(r) LS(KEY.gr,r);
+  document.getElementById('ght').value='';
+  document.getElementById('ght').placeholder=ghT()?'トークン保存済み':'GitHubトークン';
+  document.getElementById('ghr').value=ghR();
+  syst('保存した。同期する…');
+  sync();
+}
 
 function saveCfg(){
   var k=document.getElementById('key').value.trim(), m=document.getElementById('mdl').value.trim();
@@ -431,9 +555,21 @@ function railOpen(){ var r=document.getElementById('rail');
 /* ============ 起動 ============ */
 document.getElementById('mdl').value=LS(KEY.m)||defMdl();
 if(LS(KEY.k)) document.getElementById('key').placeholder='APIキー保存済み（変えるときだけ入力）';
+document.getElementById('ghr').value=ghR();
+if(ghT()) document.getElementById('ght').placeholder='トークン保存済み（変えるときだけ入力）';
 tags(); draw();
 var sv=LS(KEY.f); if(sv){ fs=parseFloat(sv); apply(); } else Zfit();
 toBottom();
+
+idbOpen().then(function(){ return idbGet('entries'); }).then(function(v){
+  if(v&&v.length){ MEM=v; }
+  else{ try{ MEM=JSON.parse(LS(KEY.e)||'[]'); }catch(e){ MEM=[]; } }   /* 前のlocalStorageから引っ越し */
+  return idbGet('del');
+}).then(function(d){
+  DEL=d||[];
+  persist(); tags(); draw(); toBottom();
+  if(ghOn()) sync(true); else syst('GitHub未設定（この端末にだけ保存中）');
+});
 document.getElementById('src').addEventListener('keydown',function(ev){
   if((ev.metaKey||ev.ctrlKey)&&ev.key==='Enter') run();
 });
