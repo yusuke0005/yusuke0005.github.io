@@ -163,6 +163,7 @@
   <button id="bFull" onclick="Full()">⛶</button>
   <button onclick="reload()">↻</button>
   <div class="cnt" id="cnt"></div>
+  <div class="cnt" id="ver"></div>
 
   <div class="panel">
     <h4>タグ</h4>
@@ -267,7 +268,7 @@ var P =
 "短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v16';
+var BUILD='v17';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -922,6 +923,7 @@ if(LS(KEY.k)) document.getElementById('key').placeholder='APIキー保存済み�
 document.getElementById('ghr').value=ghR();
 if(ghT()) document.getElementById('ght').placeholder='トークン保存済み（変えるときだけ入力）';
 tags(); colbar(); trCnt(); draw();
+document.getElementById('ver').textContent=BUILD;
 var sv=LS(KEY.f); if(sv){ fs=parseFloat(sv); apply(); } else Zfit();
 toBottom();
 
