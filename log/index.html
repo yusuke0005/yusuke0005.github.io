@@ -341,7 +341,7 @@ var PDAY =
 FMT;
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v24';
+var BUILD='v25';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -409,6 +409,8 @@ function ask(pr,text,label,ok){
       catch(err){ st('処理エラー['+BUILD+']: '+err.message); btn.disabled=false; }
     }).catch(function(e){
       if(!isAnth(key)&&e.code===400&&mode<2){ st('別のやり方で再送…'); return go(mode+1); }
+      if(e.code===429){ st('今日の無料枠を使い切った。日付が変わるまで待つか、軽いモデルに変えるか、キーを変えて');
+        pv.style.display='none'; btn.disabled=false; return; }
       var m='エラー['+BUILD+'/mode'+mode+']: '+e.message;
       st(m); pv.style.display='block'; pv.textContent=m+"\n\n（この文をそのままコピーして貼ってくれ）";
       btn.disabled=false;
@@ -1023,10 +1025,16 @@ function tmOf(e){
   return p2(t.getHours())+':'+p2(t.getMinutes());
 }
 
-/* ブロックID → 表示する日付。自分より下にある最初の「1日の区切り」の日付を使う */
+/* 区切り線は「そこからこの日が始まる」という意味にする。
+   線に 8/2 と書いてあれば、その線から下が 8/2。線より上は前の日。
+   だから線のボタンは「前日のまとめ」。線の上を締めるという意味になる。
+
+   ブロックID → 表示する日付。自分より上にある最初の「1日の区切り」の日付を使う。
+   線より上（まだ1本も線が無い範囲）は、ブロックが持ってる日付をそのまま出す。 */
+var DAYS={};
 function dayMap(list){
   var m={}, cur=null;
-  for(var i=list.length-1;i>=0;i--){
+  for(var i=0;i<list.length;i++){
     var e=list[i];
     if(isSep(e)){ if(e.sp!=='b'&&e.d) cur=e.d; continue; }
     if(cur) m[e.id]=cur;
@@ -1042,7 +1050,7 @@ function sepHtml(e){
       +' onchange="setSepD(event,\''+e.id+'\')"></b>';
   var btn = TRASH
     ? '<button onclick="unSep(event,\''+e.id+'\')">戻す</button>'
-    : (pink?'':'<button onclick="sumSep(event,\''+e.id+'\')">まとめ</button>')
+    : (pink?'':'<button onclick="sumSep(event,\''+e.id+'\')">前日のまとめ</button>')
       +'<button onclick="delSep(event,\''+e.id+'\')">消</button>';
   return '<div class="sep'+(pink?' sep-b':'')+'" data-id="'+e.id+'">'
     +'<span class="ln"></span>'+lbl+btn+'<span class="ln"></span></div>';
@@ -1056,7 +1064,8 @@ function setSepD(ev,id){
 }
 
 /* 足す。選択モードで1つだけ選んでいればその下に。ふだんはいちばん下（＝最新の下）に置く。
-   日付は「1つ前の1日区切りの次の日」を自動で入れる。違ったら線の日付を直せばいい。 */
+   線は「そこからこの日が始まる」なので、入れる日付は“これから始まる日”。
+   1つ前の1日区切りがあればその次の日。無ければ今日。違ったら線の日付を直せばいい。 */
 function addSep(kind){
   var rows=document.getElementById('rows').children;
   var ids=selIds(), target=ids.length===1?ids[0]:null;
@@ -1069,7 +1078,7 @@ function addSep(kind){
     if(target&&e.id===target) break;
   }
   var after=target||(lastB?lastB.id:'');
-  var d = prev&&prev.d ? dPlus(prev.d,1) : ((lastB&&lastB.d)||today());
+  var d = prev&&prev.d ? dPlus(prev.d,1) : today();
   MEM.unshift({id:'s'+Date.now()+Math.random().toString(36).slice(2,6),
                k:'sep',sp:kind,d:d,after:after,t:'',u:Date.now()});
   SEL={}; persist(); pushSoon(); draw(); selCnt();
@@ -1090,12 +1099,14 @@ function sumSep(ev,id){
   var src=L.map(function(e){
     return '【'+(e.t||'')+'】\n'+(e.org||e.raw||'');
   }).join('\n\n----\n\n');
-  var sp=ent(id);
   ask(PDAY,src,L.length+'件をまとめ中…',function(acc,t0){
     var got=parse(acc,src);
     if(!got.length){ st('形式が読めなかった。プレビューを見て'); endAsk(); return; }
     var n=got[0];
-    n.d=(sp&&sp.d)||L[L.length-1].d; n.tm=tmOf(L[L.length-1]);
+    /* まとめは線の上（＝前の日）のもの。だから日付は線の日付ではなく、
+       線の1つ上のブロックが属している日にする。 */
+    var last=L[L.length-1];
+    n.d=DAYS[last.id]||last.d; n.tm=tmOf(last);
     n.raw=''; n.before=id; n.u=Date.now();
     if(n.tag.indexOf('日誌')<0) n.tag.unshift('日誌');
     n.tag=fixTags(n.tag);
@@ -1120,7 +1131,7 @@ function draw(){
     return activeS===0 ? s===0 : s>=activeS; });
   list=list.slice().reverse();   /* 古い順にして、いちばん下を最新にする */
   list=weave(list,seps);         /* 区切り線を、それぞれが指すブロックの下に差し込む */
-  var DM=dayMap(list);           /* 線に属するブロックは、線が決めた日付で見せる */
+  DAYS=dayMap(list); var DM=DAYS;  /* 線に属するブロックは、線が決めた日付で見せる */
   document.getElementById('rows').innerHTML = list.map(function(e){
     if(isSep(e)) return sepHtml(e);
     var tg=(e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
