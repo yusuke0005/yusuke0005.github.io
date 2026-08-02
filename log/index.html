@@ -41,7 +41,11 @@
   .rail .sp{height:8px}
   .panel{display:none;padding:4px 6px 10px;font-size:12px;color:#8a8775;border-top:1px solid #3a382c;margin-top:6px}
   .rail.open .panel{display:block}
-  .panel h4{margin:8px 0 3px;font-size:10px;letter-spacing:.06em;color:#6b6957;font-weight:600}
+  .panel h4{margin:8px 0 3px;font-size:10px;letter-spacing:.06em;color:#6b6957;font-weight:600;
+            cursor:pointer;padding:3px 0;border-bottom:1px solid #3a382c}
+  .panel h4 i{display:inline-block;width:1.2em;font-style:normal;color:#8a8775}
+  .sec{display:none}
+  .sec.on{display:block}
   .panel input{font:inherit;font-size:13px;background:#1d1c14;color:#e8e6dc;border:1px solid #3a382c;
                border-radius:3px;padding:5px 6px;margin:3px 0;width:100%;-webkit-appearance:none}
   .panel button{width:calc(100% - 6px)}
@@ -210,27 +214,37 @@
   <div class="cnt" id="cnt"></div>
   <div class="cnt" id="ver"></div>
 
+  <!-- 各段は h4 を押すと開け閉めできる。開いてるか閉じてるかは端末に覚えさせる。
+       これから乗せるものが増えても、この形なら縦に伸び続けない -->
   <div class="panel">
-    <h4>タグ</h4>
-    <div class="tg" id="tagbar"></div>
-    <h4>色</h4>
-    <div class="tg" id="colbar"></div>
-    <h4>星</h4>
-    <div class="tg" id="starbar"></div>
-    <h4>設定</h4>
-    <input id="key" type="password" placeholder="APIキー">
-    <input id="mdl" placeholder="ふだんのモデル（安いほう）">
-    <input id="mdl2" placeholder="まとめ用モデル（賢いほう）">
-    <button onclick="saveCfg()">保存</button>
-    <button onclick="models()">使えるモデル</button>
-    <button onclick="test()">テスト</button>
-    <button onclick="dump()">全部をJSONでコピー</button>
-    <div class="msg" id="cst"></div>
-    <h4>GitHub（同期）</h4>
-    <input id="ghr" placeholder="yusuke0005/log-data">
-    <input id="ght" type="password" placeholder="GitHubトークン">
-    <button onclick="saveGh()">保存して同期</button>
-    <div class="msg" id="sy"></div>
+    <h4 onclick="secT('sTag')"><i id="m_sTag">−</i>タグ</h4>
+    <div class="sec" id="sTag"><div class="tg" id="tagbar"></div></div>
+
+    <h4 onclick="secT('sCol')"><i id="m_sCol">−</i>色</h4>
+    <div class="sec" id="sCol"><div class="tg" id="colbar"></div></div>
+
+    <h4 onclick="secT('sStar')"><i id="m_sStar">−</i>星</h4>
+    <div class="sec" id="sStar"><div class="tg" id="starbar"></div></div>
+
+    <h4 onclick="secT('sCfg')"><i id="m_sCfg">＋</i>設定</h4>
+    <div class="sec" id="sCfg">
+      <input id="key" type="password" placeholder="APIキー">
+      <input id="mdl" placeholder="ふだんのモデル（安いほう）">
+      <input id="mdl2" placeholder="まとめ用モデル（賢いほう）">
+      <button onclick="saveCfg()">保存</button>
+      <button onclick="models()">使えるモデル</button>
+      <button onclick="test()">テスト</button>
+      <button onclick="dump()">全部をJSONでコピー</button>
+      <div class="msg" id="cst"></div>
+    </div>
+
+    <h4 onclick="secT('sGh')"><i id="m_sGh">＋</i>GitHub（同期）</h4>
+    <div class="sec" id="sGh">
+      <input id="ghr" placeholder="yusuke0005/log-data">
+      <input id="ght" type="password" placeholder="GitHubトークン">
+      <button onclick="saveGh()">保存して同期</button>
+      <div class="msg" id="sy"></div>
+    </div>
   </div>
 </div>
 
@@ -294,7 +308,7 @@ var SEED = [
 ];
 
 var KEY={k:'log_key',m:'log_mdl',m2:'log_mdl2',e:'log_entries',f:'log_fs',nt:'log_nothink',
-         gt:'log_gh_token',gr:'log_gh_repo',dr:'log_draft'};
+         gt:'log_gh_token',gr:'log_gh_repo',dr:'log_draft',sec:'log_sec'};
 /* モデルは2つ持つ。ふだんの整理は安いほう、まとめみたいに頭を使うところだけ賢いほう。
    Google側は「-latest」の名前を使う。番号で固定すると、その世代が新規に閉じられた日に
    404で全部止まる（2.5がそうなった）。-latest なら世代が上がってもそのまま通る。 */
@@ -384,7 +398,7 @@ var PDAY =
 "###E###\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v32';
+var BUILD='v33';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -439,7 +453,7 @@ function stream(key,mdl,prompt,mode,onDelta){
 function ask(pr,text,label,ok,heavy){
   var key=LS(KEY.k), mdl=mdlOf(heavy);
   if(!text) return;
-  if(!key){ railOpen(); st('先に設定でAPIキーを入れて'); return; }
+  if(!key){ railOpen(); secOpen('sCfg'); st('先に設定でAPIキーを入れて'); return; }
   var btn=document.getElementById('btn'), pv=document.getElementById('prev');
   btn.disabled=true; st(label); pv.style.display='block'; pv.textContent='';
   var t0=Date.now(), acc='';
@@ -541,7 +555,7 @@ function st(s){document.getElementById('st').textContent=s;}
    モデルを2つ持つようにしたので、両方まとめて試す。 */
 function test(){
   var key=LS(KEY.k), c=document.getElementById('cst');
-  railOpen();
+  railOpen(); secOpen('sCfg');
   if(!key){ c.textContent=' 先にキーを保存して'; return; }
   var a=mdlOf(false), b=mdlOf(true), ms=(a===b)?[a]:[a,b], done=[];
   function one(mdl,mode){
@@ -561,7 +575,7 @@ function test(){
 /* 使えるモデル名を一覧する（Google用。モデル名が分からないときの逃げ道） */
 function models(){
   var key=LS(KEY.k), c=document.getElementById('cst');
-  railOpen();
+  railOpen(); secOpen('sCfg');
   if(!key){ c.textContent=' 先にキーを保存して'; return; }
   if(isAnth(key)){ c.textContent=' Claude: claude-haiku-4-5（安い） / claude-sonnet-4-5 / claude-opus-4-1'; return; }
   c.textContent=' 取得中…';
@@ -687,7 +701,7 @@ window.addEventListener('beforeunload',function(ev){
 
 var SY=false;
 function sync(quiet,retry){
-  if(!ghOn()){ if(!quiet){ railOpen(); syst('GitHubの設定がまだ'); } return Promise.resolve(); }
+  if(!ghOn()){ if(!quiet){ railOpen(); secOpen('sGh'); syst('GitHubの設定がまだ'); } return Promise.resolve(); }
   if(SY) return Promise.resolve();
   SY=true; syst('同期中…');
   return ghGet().then(function(g){
@@ -704,7 +718,7 @@ function sync(quiet,retry){
     SY=false;
     if(e.code===409&&!retry) return sync(quiet,1);   /* 他の端末と衝突したら1回だけやり直す */
     syst('同期エラー: '+e.message); sst('bad');
-    if(!quiet) railOpen();
+    if(!quiet){ railOpen(); secOpen('sGh'); }
   });
 }
 var SYT=null;
@@ -1424,6 +1438,32 @@ function Clamp(){ var r=document.getElementById('rows'),b=document.getElementByI
   if(r.classList.contains('clamp')){r.classList.remove('clamp');b.textContent='開';b.className='on';}
   else{r.classList.add('clamp');b.textContent='畳';b.className='';} }
 
+/* ============ 左パネルの各段の開け閉め ============
+   タグ・色・星・設定・GitHub を、それぞれ畳めるようにする。
+   これから乗せるものが増えていくので、最初から畳める形にしておく。
+   開いてるか閉じてるかは端末に覚えさせる（同期はしない。端末ごとの見た目の話だから）。 */
+var SECS=['sTag','sCol','sStar','sCfg','sGh'];
+var SECDEF='sTag,sCol,sStar';        /* 何も覚えてないときに開いておく段 */
+function secOn(){ var v=LS(KEY.sec); return (v===null||v===undefined?SECDEF:v).split(','); }
+function secDraw(){
+  var on=secOn();
+  SECS.forEach(function(id){
+    var d=document.getElementById(id), m=document.getElementById('m_'+id);
+    if(!d) return;
+    var o=on.indexOf(id)>=0;
+    d.className='sec'+(o?' on':'');
+    if(m) m.textContent=o?'−':'＋';
+  });
+}
+/* 畳んであっても、そこを見せたいときは開ける（エラーで設定を出すときなど） */
+function secOpen(id){ var on=secOn(); if(on.indexOf(id)<0){ on.push(id); LS(KEY.sec,on.join(',')); } secDraw(); }
+function secT(id){
+  var on=secOn(), i=on.indexOf(id);
+  if(i>=0) on.splice(i,1); else on.push(id);
+  LS(KEY.sec,on.join(','));
+  secDraw();
+}
+
 /* ============ 左レールの開閉 ============ */
 function railT(){ var r=document.getElementById('rail');
   r.classList.toggle('open');
@@ -1462,6 +1502,7 @@ document.getElementById('mdl2').value=LS(KEY.m2)||defMdl2();
 if(LS(KEY.k)) document.getElementById('key').placeholder='APIキー保存済み（変えるときだけ入力）';
 document.getElementById('ghr').value=ghR();
 if(ghT()) document.getElementById('ght').placeholder='トークン保存済み（変えるときだけ入力）';
+secDraw();
 tags(); colbar(); trCnt(); draw();
 document.getElementById('ver').textContent=BUILD;
 var sv=LS(KEY.f); if(sv){ fs=parseFloat(sv); apply(); } else Zfit();
