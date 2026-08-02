@@ -327,6 +327,11 @@ function mdlOf(heavy){
   if(heavy) return LS(KEY.m2)||LS(KEY.m)||defMdl2();
   return LS(KEY.m)||defMdl();
 }
+/* 向こうの都合で一時的にダメなやつ。こっちのコードは何も悪くないし、直しようも無い。
+   503＝混んでる。500/502/504＝向こうが転んでる。どれも「待ってもう一回投げる」が正解。
+   だから止めずに自分で投げ直す。人間が待って押し直す作業をアプリにやらせる */
+function BUSY(c){ return c===500||c===502||c===503||c===504; }
+var WAITS=[3,8,20];   /* 何秒待つか。混雑は数秒で抜けることが多いので、短く始めて伸ばす */
 
 /* ============ プロンプト ============ */
 /* 整理本文の書式（P と PSPLIT で共通） */
@@ -398,7 +403,7 @@ var PDAY =
 "###E###\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v33';
+var BUILD='v34';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -458,7 +463,8 @@ function ask(pr,text,label,ok,heavy){
   btn.disabled=true; st(label); pv.style.display='block'; pv.textContent='';
   var t0=Date.now(), acc='';
   function delta(t){ acc+=t; pv.textContent=acc; pv.scrollTop=pv.scrollHeight; }
-  function go(mode){
+  function go(mode,rt){
+    rt=rt||0;
     acc=''; pv.textContent='';
     return stream(key,mdl,pr+"\n----\n"+text,mode,delta).then(function(){
       LS(ntKey(mdl),mode);
@@ -466,7 +472,30 @@ function ask(pr,text,label,ok,heavy){
       try{ ok(acc,t0); }
       catch(err){ st('処理エラー['+BUILD+']: '+err.message); btn.disabled=false; }
     }).catch(function(e){
-      if(!isAnth(key)&&e.code===400&&mode<2){ st('別のやり方で再送…'); return go(mode+1); }
+      if(!isAnth(key)&&e.code===400&&mode<2){ st('別のやり方で再送…'); return go(mode+1,rt); }
+
+      /* 向こうが混んでるだけ。待って自分で投げ直す。3回までは黙って粘る。
+         書いた文はそのまま持ってるので、押し直さなくていい */
+      if(BUSY(e.code)&&rt<WAITS.length){
+        var w=WAITS[rt];
+        st('向こうが混んでる（'+e.code+'）。'+w+'秒待って投げ直す…（'+(rt+1)+'/'+WAITS.length+'）');
+        pv.style.display='block';
+        pv.textContent='向こうが混んでる（'+e.code+'）。\n'+w+'秒待って、自分で投げ直す。'
+                      +'\n押し直さなくていい。書いた文はそのまま残ってる。';
+        return new Promise(function(r){ setTimeout(r,w*1000); }).then(function(){ return go(mode,rt+1); });
+      }
+      /* 3回粘ってもダメだった。ここまで来たら時間を置くしかない */
+      if(BUSY(e.code)){
+        st('混んでて通らない（'+e.code+'）。少し置いてからもう一回');
+        pv.style.display='block';
+        pv.textContent='混んでて通らない（'+e.code+'）。3回投げ直したがダメだった。\n\n'
+                      +'・向こうの都合。こっちに直すところは無い\n'
+                      +'・少し置いてからもう一回押す\n'
+                      +'・まとめ（賢いほう）で出てるなら、ふだんのモデルなら通ることがある\n\n'
+                      +'使ったモデル: '+mdl;
+        btn.disabled=false; return;
+      }
+
       if(e.code===429){ st('回数制限（429）。無料枠なら日付が変わるまで待つ。有料なら投げすぎか残高切れ');
         pv.style.display='none'; btn.disabled=false; return; }
       var m='エラー['+BUILD+'/mode'+mode+']: '+e.message;
@@ -476,7 +505,7 @@ function ask(pr,text,label,ok,heavy){
     });
   }
   var m=parseInt(LS(ntKey(mdl)),10); if(isNaN(m)) m=0;
-  go(m);
+  go(m,0);
 }
 /* 「どの投げ方が通ったか」はモデルごとに違う（思考を切れないモデルがある）。
    1つの場所に覚えると、モデルを分けたときに片方の都合がもう片方に移ってしまう。 */
