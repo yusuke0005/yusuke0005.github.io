@@ -52,7 +52,9 @@
   .main{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column}
   /* min-height:0 が無いとAndroidで中身がはみ出して下の入力欄が画面外に落ちる */
   .feed{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;
-       touch-action:pan-x pan-y}
+       touch-action:pan-x pan-y;overscroll-behavior-x:contain}
+  /* overscroll-behavior-x ＝ 横に2本指で払ったときにブラウザの「戻る」に取られないようにする。
+     これが無いと、横に動かしたつもりが前のページに飛ぶ */
   .feed #zoom,.feed .sheet,.feed .rows,.feed .row,.feed .row>div{touch-action:pan-x pan-y}
   /* touch-action:pan-x pan-y ＝ スクロールは残してピンチだけ自前で拾う。
      Android は子要素にも効かせないとブラウザ側のピンチに持っていかれる */
@@ -140,8 +142,9 @@
      はみ出す量は外の余白と同じ1.2em。ただしここは font-size:.7em なので、
      1.2em ぶん出すには 1.2÷0.7＝1.714em と書く必要がある。 */
   .sep{display:flex;align-items:center;gap:.5em;padding:.5em .6em;background:#f2f0e6;
-       margin:0 -1.714em;border-bottom:1px solid #ddd9c9;font-size:.7em;color:#6b6957}
-  .sep .ln{flex:1 1 auto;height:2px;background:#b9b6a5}
+       margin:0 -1.714em;border-bottom:1px solid #ddd9c9;font-size:.7em;color:#16150f}
+  /* 1日の区切りは黒でバシッと。灰色だと見過ごす。栞（桃）だけ色を上書きする */
+  .sep .ln{flex:1 1 auto;height:.28em;background:#16150f}
   .sep b{flex:0 0 auto;font-weight:700;letter-spacing:.04em;white-space:nowrap}
   .sep button{flex:0 0 auto;font:inherit;font-size:.95em;background:#fff;color:#5c5a48;
               border:1px solid #b9b6a5;border-radius:.25em;padding:.15em .6em;
@@ -193,12 +196,14 @@
   <button onclick="Z(-1)">−</button>
   <button onclick="Z(1)">＋</button>
   <button onclick="Zfit()">全</button>
+  <button onclick="Zorg()">整</button>
   <div class="sp"></div>
   <button onclick="addSep('d')">区</button>
   <button onclick="addSep('b')">栞</button>
   <button id="bSel" onclick="selMode()">選</button>
   <button id="bTr" onclick="trashView()">🗑</button>
   <button id="bClamp" onclick="Clamp()">畳</button>
+  <button id="bSy" onclick="sync()">同</button>
   <div class="sp"></div>
   <button id="bFull" onclick="Full()">⛶</button>
   <button onclick="reload()">↻</button>
@@ -225,7 +230,6 @@
     <input id="ghr" placeholder="yusuke0005/log-data">
     <input id="ght" type="password" placeholder="GitHubトークン">
     <button onclick="saveGh()">保存して同期</button>
-    <button id="bSy" onclick="sync()">今すぐ同期</button>
     <div class="msg" id="sy"></div>
   </div>
 </div>
@@ -380,7 +384,7 @@ var PDAY =
 "###E###\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v31';
+var BUILD='v32';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -1314,7 +1318,16 @@ function Zc(v){ return Math.max(ZMIN,Math.min(ZMAX,v)); }
 function Z(d){ zoomAt(fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2))); }
 function Zfit(){ var f=document.getElementById('feed');
   var w=(f&&f.clientWidth)||window.innerWidth;
-  fs=Zc((w-4)/64.4); apply(); }   /* 62em＋左右の余白1.2em×2 */
+  fs=Zc((w-4)/64.4); apply();     /* 62em＋左右の余白1.2em×2 */
+  f.scrollLeft=0; }
+
+/* 「整」＝日付＋タイトル＋整理（5+12+24＝41em）が画面いっぱいになる大きさにする。
+   原文は右にはみ出して見えなくなるが、それでいい。読み返すときに見たいのはこの3つだから。
+   はみ出した分は横スクロールで見にいける。 */
+function Zorg(){ var f=document.getElementById('feed');
+  var w=(f&&f.clientWidth)||window.innerWidth;
+  fs=Zc((w-4)/43.4); apply();     /* 41em＋左の余白1.2em＋すこし */
+  f.scrollLeft=0; }
 
 /* ---- ピンチで表そのものを拡大縮小する（指の位置を起点にする） ---- */
 function pd(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY;
