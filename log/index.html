@@ -58,7 +58,11 @@
      Android は子要素にも効かせないとブラウザ側のピンチに持っていかれる */
 
   /* ---- 表。font-size 1本で全部が比例して拡大縮小する ---- */
-  #zoom,#zhead{font-size:16px}
+  /* 左右に1.2emずつ空ける。ここは区切り線が表からはみ出すための場所。
+     見出しと表の両方を同じだけずらしたいので、外側で一度に持たせる。
+     ※ 表そのものは62em。外の余白を足して 62+1.2×2＝64.4em。
+        列を足す/減らすときは、この64.4と Zfit の除数を必ず一緒に直す。 */
+  #zoom,#zhead{font-size:16px;padding:0 1.2em}
   .sheet{width:62em;margin:0 auto;padding:0 0 1.2em}
   @media (max-width:640px){ .sheet{margin:0} }
   .head{display:flex;background:#e2e0d6;border-bottom:1px solid #b9b6a5;
@@ -132,8 +136,11 @@
   .empty{padding:2em .8em;color:#8a8775;font-size:.85em;text-align:center;background:#fff}
 
   /* ---- 区切り線。灰＝1日の区切り / 桃＝しおり ---- */
+  /* 区切り線は表の横幅より左右にはみ出させる。表の中で止まってると見過ごすから。
+     はみ出す量は外の余白と同じ1.2em。ただしここは font-size:.7em なので、
+     1.2em ぶん出すには 1.2÷0.7＝1.714em と書く必要がある。 */
   .sep{display:flex;align-items:center;gap:.5em;padding:.5em .6em;background:#f2f0e6;
-       border-bottom:1px solid #ddd9c9;font-size:.7em;color:#6b6957}
+       margin:0 -1.714em;border-bottom:1px solid #ddd9c9;font-size:.7em;color:#6b6957}
   .sep .ln{flex:1 1 auto;height:2px;background:#b9b6a5}
   .sep b{flex:0 0 auto;font-weight:700;letter-spacing:.04em;white-space:nowrap}
   .sep button{flex:0 0 auto;font:inherit;font-size:.95em;background:#fff;color:#5c5a48;
@@ -192,8 +199,6 @@
   <button id="bSel" onclick="selMode()">選</button>
   <button id="bTr" onclick="trashView()">🗑</button>
   <button id="bClamp" onclick="Clamp()">畳</button>
-  <button onclick="toBottom()">↓</button>
-  <button id="bSy" onclick="sync()">⇅</button>
   <div class="sp"></div>
   <button id="bFull" onclick="Full()">⛶</button>
   <button onclick="reload()">↻</button>
@@ -220,6 +225,7 @@
     <input id="ghr" placeholder="yusuke0005/log-data">
     <input id="ght" type="password" placeholder="GitHubトークン">
     <button onclick="saveGh()">保存して同期</button>
+    <button id="bSy" onclick="sync()">今すぐ同期</button>
     <div class="msg" id="sy"></div>
   </div>
 </div>
@@ -259,6 +265,7 @@
   <button class="s0" onclick="selStar(0)">★消</button>
   <button id="bSplit" onclick="splitSel()">分割</button>
       <button id="bJoin" onclick="joinSel()">連結</button>
+      <button id="bCpOrg" onclick="copyOrg(this)">整理をコピー</button>
       <button id="bToTr" onclick="toTrash()">🗑 ゴミ箱へ</button>
       <button id="bBack" onclick="unTrash()" style="display:none">戻す</button>
       <button class="warn" id="bPurge" onclick="purge(this)" style="display:none">完全に削除</button>
@@ -373,7 +380,7 @@ var PDAY =
 "###E###\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v30';
+var BUILD='v31';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -890,6 +897,24 @@ function selAll(){
 }
 function selClear(){ SEL={}; selCnt(); draw(); }
 
+/* 選んだブロックの「整理」の欄だけを繋いでコピーする。
+   ブロックごと持っていくと日付や原文まで付いてきて崩れる。欲しいのは中身だけ。
+   繋ぐ順番は古い順。読み返す向きと同じにする。 */
+function copyOrg(b){
+  var ids=selIds(); if(!ids.length){ st('先に選んで'); return; }
+  var L=all().filter(function(e){ return ids.indexOf(e.id)>=0 && !isSep(e); });
+  L.sort(function(x,y){
+    var c=String(x.d||'').localeCompare(String(y.d||''));
+    return c!==0?c:String(x.id).localeCompare(String(y.id));
+  });
+  var s=L.map(function(e){ return e.org||''; }).filter(Boolean).join('\n\n');
+  if(!s){ st('整理の中身が無い'); return; }
+  copy(s);
+  var old=b.textContent; b.textContent='コピーした';
+  setTimeout(function(){ b.textContent=old; },900);
+  st(L.length+'件の整理をコピーした');
+}
+
 function selColor(k){
   var ids=selIds(); if(!ids.length) return;
   var L=all();
@@ -1289,7 +1314,7 @@ function Zc(v){ return Math.max(ZMIN,Math.min(ZMAX,v)); }
 function Z(d){ zoomAt(fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2))); }
 function Zfit(){ var f=document.getElementById('feed');
   var w=(f&&f.clientWidth)||window.innerWidth;
-  fs=Zc((w-4)/62); apply(); }
+  fs=Zc((w-4)/64.4); apply(); }   /* 62em＋左右の余白1.2em×2 */
 
 /* ---- ピンチで表そのものを拡大縮小する（指の位置を起点にする） ---- */
 function pd(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY;
@@ -1297,7 +1322,7 @@ function pd(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY;
 function pm(t){ return {x:(t[0].clientX+t[1].clientX)/2, y:(t[0].clientY+t[1].clientY)/2}; }
 
 /* 刻みを粗くして、描き直す回数そのものを減らす（ガクつきの元は描き直しすぎ） */
-function qz(v){ var s=v<6?0.25:(v<16?0.5:1); return Math.round(v/s)*s; }
+function qz(v){ var s=v<6?0.25:0.5; return Math.round(v/s)*s; }
 
 /* 指（またはカーソル）の下にある一点が動かないように、スクロール位置も一緒にずらす */
 function zoomNow(nf,cx,cy,nosave){
@@ -1358,11 +1383,27 @@ var IOSG=('ongesturestart' in window);   /* iOSは gesture だけ使う。両方
                   (ev.clientX!=null?ev.clientX:PZ.x),(ev.clientY!=null?ev.clientY:PZ.y),true); });
   f.addEventListener('gestureend',function(ev){ ev.preventDefault(); PZ=null; LS(KEY.f,fs); });
 
-  /* PC：Ctrl+ホイール、トラックパッドのピンチ、どちらもカーソル位置を起点にする */
+  /* PC：Ctrl+ホイール、トラックパッドのピンチ、どちらもカーソル位置を起点にする。
+
+     前は1回ごとに固定で10%動かしていた。トラックパッドは指を少し開くだけで
+     何十回もイベントが来るので、それだと一気に飛んで狙った大きさで止まらない。
+     だから動く量を「どれだけ指を開いたか（deltaY）」に比例させる。
+     マウスのホイールは1ノッチが100前後で来るので、頭を40で抑える。
+
+     ZW は刻みを丸める前の連続した値。丸めた fs を毎回の起点にすると、
+     動く量が刻みより小さいときに毎回同じ値へ戻って、いつまでも動かなくなる。 */
+  var ZW=0, ZWT=0;
   f.addEventListener('wheel',function(ev){
     if(!ev.ctrlKey&&!ev.metaKey) return;
     ev.preventDefault();
-    zoomAt(fs*(ev.deltaY>0?0.9:1.11),ev.clientX,ev.clientY);
+    var now=Date.now();
+    if(now-ZWT>400) ZW=fs;          /* 間が空いたら今の大きさから取り直す */
+    ZWT=now;
+    var dy=ev.deltaY;
+    if(ev.deltaMode===1) dy*=16; else if(ev.deltaMode===2) dy*=100;
+    dy=Math.max(-40,Math.min(40,dy));
+    ZW=Zc(ZW*Math.exp(-dy*0.006));
+    zoomAt(ZW,ev.clientX,ev.clientY);
   },{passive:false});
 })();
 
