@@ -94,27 +94,31 @@
   .c-org .h{display:block;font-weight:700;margin:.5em 0 .1em;color:#3a382c}
   .c-org .li{display:block;padding-left:1em;text-indent:-1em}
 
-  /* ---- 色＝このあと何をするか。ブロック全体を薄く染める。無色＝まだ仕分けてない ---- */
-  .row.k-b,.row.k-b:nth-child(even){background:#e4edfb}   /* 青＝これから何かする */
-  .row.k-g,.row.k-g:nth-child(even){background:#e6f2e9}   /* 緑＝済んだ */
-  .row.k-x,.row.k-x:nth-child(even){background:#efede5;color:#a8a696}  /* 灰＝要らない */
-  .row.k-x .c-org,.row.k-x .c-raw,.row.k-x .c-title{opacity:.55}
+  /* ---- 色と枠線の見た目は、本人が決めた定義から作って #dyn に流し込む（このファイルには書かない） ---- */
   .row.open{box-shadow:inset .18em 0 0 #c8a03c}
+  /* 色・枠線・タグを自分で足す欄 */
+  .ed{display:flex;align-items:center;gap:4px;margin:3px 0}
+  .ed input[type=color]{flex:0 0 22px;width:22px;height:22px;padding:0;margin:0;border:1px solid #3a382c;
+                        background:#26251b;border-radius:3px;-webkit-appearance:none}
+  .ed input[type=text]{flex:1 1 auto;width:auto;margin:0}
+  .ed select{flex:1 1 auto;width:auto;font:inherit;font-size:12px;background:#26251b;color:#f4f4f2;
+             border:1px solid #3a382c;border-radius:3px;padding:3px}
+  .ed button{flex:0 0 auto;width:auto!important;margin:0;padding:4px 7px}
   /* ---- 重要＝日付の欄だけ赤くする。ブロックの色（このあと何をするか）とぶつからないように場所を分ける ---- */
   .c-date.im{background:#fbe6e3;border-radius:.2em}
   .dtx{cursor:pointer}
   /* 色を選ぶ丸ボタン（タイトルの左肩） */
   .ch{display:inline-block;width:.9em;height:.9em;border-radius:50%;margin:0 .35em 0 0;
       vertical-align:-.05em;background:#fff;box-shadow:inset 0 0 0 1px #b9b6a5;cursor:pointer}
-  .ch.ch-b{background:#3b7dd8;box-shadow:none}
-  .ch.ch-g{background:#4a9d5f;box-shadow:none} .ch.ch-x{background:#b9b6a5;box-shadow:none}
   .c-title.pk{overflow:visible;position:relative;z-index:6}
-  .pal{position:absolute;left:.2em;top:1.6em;width:10.5em;background:#fff;border:1px solid #b9b6a5;
-       border-radius:.2em;overflow:hidden}
+  .pal{position:absolute;left:.2em;top:1.6em;width:11em;background:#fff;border:1px solid #b9b6a5;
+       border-radius:.2em;overflow:hidden;max-height:22em;overflow-y:auto}
   .pal .sw{display:block;height:2em;line-height:2em;font-size:.7em;font-weight:600;
-           padding-left:.6em;white-space:nowrap;color:#fff}
-  .pal .sw.s0{background:#fff;color:#8a8775} .pal .sw.s1{background:#3b7dd8}
-  .pal .sw.s2{background:#4a9d5f} .pal .sw.s3{background:#b9b6a5}
+           padding-left:.6em;white-space:nowrap;color:#fff;cursor:pointer}
+  .pal .sw.pl{background:#fff;color:#8a8775}
+  .pal .hd{display:block;font-size:.62em;color:#8a8775;padding:.4em .6em 0;font-weight:600}
+  .pal .nw{display:block;width:calc(100% - 1.2em);margin:.4em .6em;font:inherit;font-size:.68em;
+           padding:.25em .3em;border:1px solid #b9b6a5;border-radius:.2em;-webkit-appearance:none}
   /* ---- 星＝重要度。色（次に何をやるか）とは別の軸。日付の下に置く ---- */
   /* 5つ確実に入るように、星1つぶんの幅を決め打ちする。
      ★ の実際の字幅はフォント任せなので、幅を指定しないと端末によって5つ目がはみ出て消える。 */
@@ -202,6 +206,9 @@
   .in .send:disabled{background:#4a4838;color:#8a8775}
   .st{display:block;color:#c8a03c;font-size:12px;margin-top:4px;min-height:1em}
 </style>
+<!-- 色と枠線の見た目は、本人が決めた定義から起動時に組み立ててここに入れる。
+     ここに直接書かないのは、俺が意味を決めてしまわないため。 -->
+<style id="dyn"></style>
 </head>
 <body>
 
@@ -234,6 +241,17 @@
 
     <h4 onclick="secT('sCol')"><i id="m_sCol">−</i>色</h4>
     <div class="sec" id="sCol"><div class="tg" id="colbar"></div></div>
+
+    <h4 onclick="secT('sBd')"><i id="m_sBd">＋</i>枠線</h4>
+    <div class="sec" id="sBd"><div class="tg" id="bdbar"></div></div>
+
+    <!-- 意味を決めるのは本人。ここで色・枠線・やることの名前を自由に足したり書き換えたりする -->
+    <h4 onclick="secT('sDef')"><i id="m_sDef">＋</i>色・枠線・やることを作る</h4>
+    <div class="sec" id="sDef">
+      <div class="msg">色（ブロック全体）</div><div id="edCol"></div>
+      <div class="msg">枠線（色と重ねられる）</div><div id="edBd"></div>
+      <div class="msg">やること（タグの上の段）</div><div id="edAct"></div>
+    </div>
 
     <h4 onclick="secT('sStar')"><i id="m_sStar">−</i>星</h4>
     <div class="sec" id="sStar"><div class="tg" id="starbar"></div></div>
@@ -280,15 +298,14 @@
   <div class="in">
     <div class="selbar" id="selbar">
       <b id="selcnt">0 件</b>
-      <button class="b" onclick="selColor('b')">青</button>
-      <button class="g" onclick="selColor('g')">緑</button>
-      <button class="x" onclick="selColor('x')">灰</button>
+      <!-- 色・枠線・やることのボタンは、本人が作った定義から組み立てる（selbarDraw） -->
+      <span id="selcols"></span>
       <button class="n" onclick="selColor('')">無色</button>
+      <span id="selbds"></span>
+      <button class="n" onclick="selBd('')">枠なし</button>
       <button class="r" onclick="selIm(1)">重要</button>
       <button class="n" onclick="selIm(0)">重要↓</button>
-      <button onclick="selAct('AI壁打ち')">＋AI壁打ち</button>
-      <button onclick="selAct('下書きを進める')">＋下書き</button>
-      <button onclick="selAct('調べる')">＋調べる</button>
+      <span id="selacts"></span>
       <button onclick="selAll()">全選択</button>
       <button onclick="selClear()">解除</button>
       <button class="s" onclick="selStar(1)">★1</button>
@@ -422,7 +439,7 @@ var PDAY =
 "###E###\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v35';
+var BUILD='v36';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -672,7 +689,7 @@ function idbSet(k,v){ return new Promise(function(res){
   try{ var q=IDB.transaction('kv','readwrite').objectStore('kv').put(v,k);
     q.onsuccess=function(){ res(true); }; q.onerror=function(){ res(false); };
   }catch(e){ res(false); } }); }
-function persist(){ numAll(); idbSet('entries',MEM); idbSet('del',DEL); }
+function persist(){ numAll(); idbSet('entries',MEM); idbSet('del',DEL); idbSet('conf',CONF); }
 
 /* ---- 本体：GitHub ---- */
 function ghT(){ return LS(KEY.gt)||''; }
@@ -693,11 +710,12 @@ function ghUrl(){ return 'https://api.github.com/repos/'+ghR()+'/contents/data.j
 
 function ghGet(){
   return fetch(ghUrl()+'?t='+Date.now(),{headers:ghHead(),cache:'no-store'}).then(function(r){
-    if(r.status===404) return {data:{entries:[],del:[]},sha:null};   /* まだファイルが無い */
+    if(r.status===404) return {data:{entries:[],del:[],conf:null},sha:null};   /* まだファイルが無い */
     if(!r.ok) return r.text().then(function(b){ var e=new Error(r.status+' '+b.slice(0,160)); e.code=r.status; throw e; });
     return r.json().then(function(j){
       var d; try{ d=JSON.parse(b64d(j.content)); }catch(e){ d={entries:[],del:[]}; }
       if(!d||!d.entries) d={entries:[],del:[]};
+      if(!d.conf) d.conf=null;
       return {data:d,sha:j.sha};
     });
   });
@@ -755,11 +773,14 @@ function sync(quiet,retry){
   return ghGet().then(function(g){
     var rd=(g.data.del)||[];
     var del=rd.concat(DEL.filter(function(x){ return rd.indexOf(x)<0; }));
-    var before=JSON.stringify({e:g.data.entries,d:rd});
     var m=mix(MEM,g.data.entries,del);
-    MEM=m; DEL=del; persist(); draw(); tags(); colbar(); trCnt();
-    if(JSON.stringify({e:MEM,d:DEL})===before){ syst('同期OK '+MEM.length+'件'); SY=false; sst('ok'); return; }
-    return ghPut({entries:MEM,del:DEL},g.sha).then(function(){
+    /* 色・枠線・やることの定義。あとで触った方をまるごと採る（中身は混ぜない） */
+    var rc=g.data.conf;
+    if(rc&&(rc.u||0)>(CONF.u||0)){ CONF=rc; colCss(); edDraw(); selbarDraw(); }
+    var before=JSON.stringify({e:g.data.entries,d:rd,c:rc||null});
+    MEM=m; DEL=del; persist(); draw(); tags(); colbar(); bdbar(); trCnt();
+    if(JSON.stringify({e:MEM,d:DEL,c:CONF})===before){ syst('同期OK '+MEM.length+'件'); SY=false; sst('ok'); return; }
+    return ghPut({entries:MEM,del:DEL,conf:CONF},g.sha).then(function(){
       syst('保存した '+MEM.length+'件'); SY=false; sst('ok');
     });
   }).catch(function(e){
@@ -833,6 +854,11 @@ function cp(ev,id,f){
 
 /* ============ 描画（古い順。いちばん下が最新） ============ */
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+/* 名前を本人が自由に打てるようになったので、' や " が入っても壊れないようにする。
+   esa＝value="..." に入れる用。jsa＝onclick="f('...')" の中に入れる用（先にJSの逃がしをやる）。 */
+function esa(s){ return esc(s).replace(/"/g,'&quot;'); }
+function jsa(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 /* #12 と書いてあったら、そのブロックへのリンクにする。
    見出しの「# 」は間に空白があるので、ここには引っかからない。 */
 function lk(l){ return l.replace(/#(\d{1,6})/g,
@@ -843,21 +869,120 @@ function md(s){ return esc(s).split('\n').map(function(l){
   if(l.indexOf('・')===0) return '<span class="li">'+ln(l)+'</span>';
   return ln(l)+'<br>'; }).join(''); }
 
-/* ============ 色 ============
-   色＝次に何をやるか。読んだら必ず何か付ける。だから無色＝まだ読んでない。
-   b:青 AIと壁打ちしたい / r:赤 もう一回読み返したい / g:緑 手をつけた / x:灰 要らない
+/* ============ 色・枠線・やること ============
+   ここで俺（AI）が「この色はこういう意味」と決めると、その意味は二度と動かせなくなる。
+   意味は本人のもので、壁打ちの途中でいくらでも変わる。そのたびに俺に頼むのは効率が悪い。
+   だから作るのは道具だけにする。色を足すのも、名前を付けるのも、消すのも本人がやる。
+   定義は data.json に一緒に入れて、端末をまたいでも同じになるようにする。
+   最初に入ってる中身はただの例。全部消して作り直していい。
+   色＝ブロック全体。枠線＝色と別の軸なので重ねられる。やること＝タグの上の段。
    ============================================================ */
-/* 色は「このあと何をするか」だけを持たせる。重要かどうかは日付の欄が持つ（別の軸だから）。
-   ぱっと見て無色があれば、まだ仕分けてない。全部が緑になればその範囲は片付いている。 */
-var COL=[{k:'',n:'無色',w:'まだ仕分けてない'},{k:'b',n:'青',w:'これから何かする'},
-         {k:'g',n:'緑',w:'済んだ'},{k:'x',n:'灰',w:'要らない'}];
+var CONF={u:0,
+  cols:[{k:'b',n:'これから何かする',h:'#3b7dd8'},
+        {k:'g',n:'済んだ',h:'#4a9d5f'},
+        {k:'x',n:'要らない',h:'#9a9784',dim:1}],
+  bds:[{k:'y',n:'分けたて',h:'#d9a521'}],
+  acts:['AI壁打ち','下書きを進める','調べる']};
+
+function newK(){ return 'k'+Date.now().toString(36)+Math.random().toString(36).slice(2,4); }
+/* 選んだ色を白に寄せて、行の背景に使える薄さにする。本人が選ぶのは1色だけでいい */
+function pale(h,r){
+  var m=/^#?([0-9a-fA-F]{6})$/.exec(String(h||''));
+  if(!m) return '#ffffff';
+  var v=parseInt(m[1],16), w=(r===undefined?.86:r), o=[v>>16&255,v>>8&255,v&255];
+  return '#'+o.map(function(x){ var y=Math.round(x+(255-x)*w); return (y<16?'0':'')+y.toString(16); }).join('');
+}
+function colOf(k){ for(var i=0;i<CONF.cols.length;i++) if(CONF.cols[i].k===k) return CONF.cols[i]; return null; }
+function bdOf(k){ for(var i=0;i<CONF.bds.length;i++) if(CONF.bds[i].k===k) return CONF.bds[i]; return null; }
+/* 定義から見た目を組み立てて #dyn に流す。定義を変えたらここを呼び直すだけで全部変わる */
+function colCss(){
+  var s=CONF.cols.map(function(c){
+    return '.row.k-'+c.k+',.row.k-'+c.k+':nth-child(even){background:'+pale(c.h)+'}'
+      +(c.dim?'.row.k-'+c.k+' .c-org,.row.k-'+c.k+' .c-raw,.row.k-'+c.k+' .c-title{opacity:.55}':'')
+      +'.ch.ch-'+c.k+'{background:'+c.h+';box-shadow:none}'
+      +'.pal .sw.sw-'+c.k+'{background:'+c.h+'}'
+      +'.selbar button.sc-'+c.k+'{background:'+c.h+';color:#fff}';
+  }).join('\n');
+  s+='\n'+CONF.bds.map(function(b){
+    return '.row.b-'+b.k+'{outline:.14em solid '+b.h+';outline-offset:-.14em}'
+      +'.pal .sw.bw-'+b.k+'{background:#fff;color:'+b.h+';box-shadow:inset 0 0 0 2px '+b.h+'}'
+      +'.selbar button.sb-'+b.k+'{background:#26251b;color:'+b.h+';box-shadow:inset 0 0 0 2px '+b.h+'}';
+  }).join('\n');
+  document.getElementById('dyn').textContent=s;
+}
+function confSave(){
+  CONF.u=Date.now();
+  idbSet('conf',CONF); colCss(); edDraw(); colbar(); bdbar(); selbarDraw(); draw(); pushSoon();
+}
+
+/* ---- 定義を編集する欄（左レール「色・枠線・やることを作る」） ----
+   丸を押して色を選ぶ、右の欄に名前を打つ、消は消す。それだけ。
+   名前がそのまま意味になる。何に使うかは書かない。 */
+function edRow(t,i,o){
+  return '<div class="ed">'
+    +'<input type="color" value="'+esa(o.h)+'" onchange="edSet(\''+t+'\','+i+',\'h\',this.value)">'
+    +'<input type="text" value="'+esa(o.n)+'" placeholder="名前" onchange="edSet(\''+t+'\','+i+',\'n\',this.value)">'
+    +'<button onclick="edDel(\''+t+'\','+i+')">消</button></div>';
+}
+function edDraw(){
+  var c=document.getElementById('edCol'); if(!c) return;
+  c.innerHTML=CONF.cols.map(function(o,i){ return edRow('cols',i,o); }).join('')
+    +'<div class="ed"><button onclick="edAdd(\'cols\')">＋色を足す</button></div>'
+    +'<div class="msg">やることが全部済んだら付ける色</div>'
+    +'<div class="ed"><select onchange="edDone(this.value)">'
+    +'<option value=""'+(CONF.doneK?'':' selected')+'>なし</option>'
+    +CONF.cols.map(function(o){
+       return '<option value="'+esa(o.k)+'"'+(CONF.doneK===o.k?' selected':'')+'>'+esc(o.n)+'</option>'; }).join('')
+    +'</select></div>';
+  document.getElementById('edBd').innerHTML=
+    CONF.bds.map(function(o,i){ return edRow('bds',i,o); }).join('')
+    +'<div class="ed"><button onclick="edAdd(\'bds\')">＋枠線を足す</button></div>';
+  document.getElementById('edAct').innerHTML=
+    (CONF.acts||[]).map(function(n,i){
+      return '<div class="ed"><input type="text" value="'+esa(n)+'" onchange="edAct('+i+',this.value)">'
+        +'<button onclick="edDel(\'acts\','+i+')">消</button></div>'; }).join('')
+    +'<div class="ed"><button onclick="edAdd(\'acts\')">＋やることを足す</button></div>';
+}
+function edSet(t,i,f,v){ var o=CONF[t][i]; if(!o) return; o[f]=v; confSave(); }
+function edAct(i,v){ v=String(v||'').trim(); if(!v) return; CONF.acts[i]=v; confSave(); }
+function edAdd(t){
+  if(t==='acts') CONF.acts=(CONF.acts||[]).concat(['新しいやること']);
+  else CONF[t]=CONF[t].concat([{k:newK(),n:t==='bds'?'新しい枠線':'新しい色',h:'#8a8775'}]);
+  confSave(); st('名前を打ち替えて');
+}
+/* 消しても、そのキーが付いてるブロックはそのまま残る。見た目が無地に戻るだけ */
+function edDel(t,i){
+  var o=CONF[t][i]; if(!o) return;
+  CONF[t]=CONF[t].filter(function(x,j){ return j!==i; });
+  if(t==='cols'&&CONF.doneK===o.k) CONF.doneK='';
+  confSave();
+}
+function edDone(k){ CONF.doneK=k||''; confSave(); }
+
+/* 枠線で絞る帯 */
+function bdbar(){
+  var b=document.getElementById('bdbar'); if(!b) return;
+  var n={};
+  all().forEach(function(e){ if(isSep(e)) return; if(e.bd) n[e.bd]=(n[e.bd]||0)+1; });
+  b.innerHTML='<button class="'+(activeB===null?'on':'')+'" onclick="pickB(null,this)">全部</button>'
+    +CONF.bds.map(function(o){
+      return '<button class="'+(activeB===o.k?'on':'')+'" onclick="pickB(\''+jsa(o.k)+'\',this)">'
+        +esc(o.n)+' '+(n[o.k]||0)+'</button>'; }).join('');
+}
+function pickB(k,b){
+  activeB=k; draw(); toBottom();
+  var bs=document.getElementById('bdbar').getElementsByTagName('button');
+  for(var i=0;i<bs.length;i++) bs[i].className=''; if(b) b.className='on';
+}
+
 var activeC=null;   /* 色での絞り込み。null＝全部 */
 var activeI=false;  /* 重要だけに絞る */
-var LASTID=null;    /* PCでキー1〜5を押したときの相手 */
+var activeB=null;   /* 枠線での絞り込み。null＝全部 */
+var LASTID=null;    /* PCで数字キーを押したときの相手 */
 
 function ent(id){ var L=all(); for(var i=0;i<L.length;i++) if(L[i].id===id) return L[i]; return null; }
 
-/* タイトルの左肩の丸をタップ＝5色を出す。もう一回タップで閉じる */
+/* タイトルの左肩の丸をタップ＝色と枠線を出す。もう一回タップで閉じる */
 function palOpen(ev,id){
   ev.stopPropagation();
   var cell=ev.currentTarget.parentNode;          /* .c-title */
@@ -868,8 +993,15 @@ function palOpen(ev,id){
   cell.classList.add('pk');
   var box=document.createElement('div');
   box.className='pal';
-  box.innerHTML = COL.map(function(c,i){
-    return '<span class="sw s'+i+'" onclick="setC(event,\''+id+'\',\''+c.k+'\')">'+c.w+'</span>'; }).join('');
+  var h='<b class="hd">色</b>'
+    +'<span class="sw pl" onclick="setC(event,\''+id+'\',\'\')">なし</span>'
+    +CONF.cols.map(function(c){
+       return '<span class="sw sw-'+c.k+'" onclick="setC(event,\''+id+'\',\''+jsa(c.k)+'\')">'+esc(c.n)+'</span>'; }).join('')
+    +'<b class="hd">枠線</b>'
+    +'<span class="sw pl" onclick="setB(event,\''+id+'\',\'\')">なし</span>'
+    +CONF.bds.map(function(b){
+       return '<span class="sw bw-'+b.k+'" onclick="setB(event,\''+id+'\',\''+jsa(b.k)+'\')">'+esc(b.n)+'</span>'; }).join('');
+  box.innerHTML=h;
   cell.appendChild(box);
 }
 /* よそを触ったら閉じる（palOpen と setC は伝播を止めてるのでここには来ない） */
@@ -880,17 +1012,38 @@ function palClose(){
     var b=p.getElementsByClassName('pal')[0]; if(b) b.parentNode.removeChild(b); }
 }
 
+/* 行のクラスをその場で組み立て直す。色・枠線・開閉・選択が全部ここに乗る */
+function rowCls(e,row){
+  return 'row'+(e.c?' k-'+e.c:'')+(e.bd?' b-'+e.bd:'')
+    +(row&&row.classList.contains('open')?' open':'')
+    +(row&&row.classList.contains('sel')?' sel':'');
+}
 function setC(ev,id,c){
   if(ev) ev.stopPropagation();
   var e=ent(id); if(!e) return;
   e.c=c; e.u=Date.now(); persist(); pushSoon(); colbar(); palClose();
   var row=document.querySelector('.row[data-id="'+id+'"]');
   if(row){
-    row.className='row'+(c?' k-'+c:'')+(row.classList.contains('open')?' open':'');
+    row.className=rowCls(e,row);
     var ch=row.getElementsByClassName('ch')[0];
     if(ch) ch.className='ch'+(c?' ch-'+c:'');
   }
   if(activeC!==null) draw();   /* 色で絞ってる最中は並びが変わるので描き直す */
+}
+/* 枠線。色とは別に持つので、両方いっぺんに付けられる */
+function setB(ev,id,b){
+  if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return;
+  if(b) e.bd=b; else delete e.bd;
+  e.u=Date.now(); persist(); pushSoon(); bdbar(); palClose();
+  var row=document.querySelector('.row[data-id="'+id+'"]');
+  if(row) row.className=rowCls(e,row);
+  if(activeB!==null) draw();
+}
+function selBd(k){
+  var ids=selIds(); if(!ids.length) return;
+  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ if(k) e.bd=k; else delete e.bd; e.u=Date.now(); } });
+  persist(); pushSoon(); bdbar(); draw();
 }
 
 /* ============ 重要＝日付の欄を赤くする ============
@@ -917,40 +1070,43 @@ function selIm(v){
    このブロックについて、このあと何をするか。複数出ることがある。
    済んだものはタップして取り消し線にする。消さない。何をした話だったかが履歴として残る。
    全部に取り消し線が付いたら、そのブロックの色を自動で緑にする（＝片付いた）。 */
-var ACT=['AI壁打ち','下書きを進める','調べる'];
-
-function actList(){                 /* 既定の3つ＋今まで使ったもの */
-  var s=ACT.slice();
+function actList(){                 /* 定義してあるもの＋今まで実際に使ったもの */
+  var s=(CONF.acts||[]).slice();
   all().forEach(function(e){ (e.at||[]).forEach(function(x){ if(s.indexOf(x)<0) s.push(x); }); });
   return s;
 }
-function atDone(e){                 /* 行動タグが全部消し込まれたか */
+function atDone(e){                 /* やることが全部消し込まれたか */
   var a=e.at||[]; if(!a.length) return false;
   var x=e.ax||[];
   return a.every(function(n){ return x.indexOf(n)>=0; });
+}
+/* 全部済んだときに自動で付ける色。どの色にするかは本人が「設定」で選ぶ。空なら何もしない */
+function autoC(e){
+  var k=CONF.doneK||'';
+  if(!k||!colOf(k)) return;
+  if(atDone(e)) e.c=k;
+  else if(e.c===k) e.c='';
 }
 function atRedraw(id){
   var e=ent(id), row=document.querySelector('.row[data-id="'+id+'"]');
   if(!e||!row) return;
   var box=row.getElementsByClassName('atg')[0];
   if(box) box.innerHTML=atHtml(e);
-  row.className='row'+(e.c?' k-'+e.c:'')+(row.classList.contains('open')?' open':'')
-    +(row.classList.contains('sel')?' sel':'');
+  row.className=rowCls(e,row);
   var ch=row.getElementsByClassName('ch')[0];
   if(ch) ch.className='ch'+(e.c?' ch-'+e.c:'');
 }
-/* 行動タグをタップ＝取り消し線を付ける／外す */
+/* やることをタップ＝取り消し線を付ける／外す。消さないのは、何をした話だったかを残すため */
 function atTog(ev,id,n){
   if(ev) ev.stopPropagation();
   if(SELMODE) return;
   var e=ent(id); if(!e) return;
   var x=(e.ax||[]).slice(), i=x.indexOf(n);
   if(i>=0) x.splice(i,1); else x.push(n);
-  e.ax=x;
-  if(atDone(e)) e.c='g';                       /* 全部済んだら自動で緑 */
-  else if(e.c==='g') e.c='b';                  /* 消し込みを戻したら青に戻す */
+  e.ax=x; autoC(e);
   e.u=Date.now(); persist(); pushSoon(); colbar(); atRedraw(id);
 }
+/* 一覧から選ぶ。無ければその場で打って作る。俺に頼まなくていいようにする */
 function atOpen(ev,id){
   ev.stopPropagation();
   var cell=ev.currentTarget.parentNode.parentNode;   /* .atg の親＝.c-title */
@@ -960,26 +1116,34 @@ function atOpen(ev,id){
   cell.classList.add('pk');
   var box=document.createElement('div');
   box.className='pal apl';
-  box.innerHTML=actList().map(function(n){
-    return '<span class="sw" onclick="atAdd(event,\''+id+'\',\''+esc(n)+'\')">'+esc(n)+'</span>'; }).join('');
+  box.innerHTML='<b class="hd">やること</b>'
+    +'<input class="nw" placeholder="打ってEnterで新しく作る" onclick="event.stopPropagation()"'
+    +' onkeydown="if(event.key===\'Enter\'){atNew(event,\''+id+'\',this.value)}">'
+    +actList().map(function(n){
+      return '<span class="sw pl" onclick="atAdd(event,\''+id+'\',\''+jsa(n)+'\')">'+esc(n)+'</span>'; }).join('');
   cell.appendChild(box);
+}
+function atNew(ev,id,v){
+  if(ev){ ev.stopPropagation(); ev.preventDefault(); }
+  v=String(v||'').trim(); if(!v) return;
+  if((CONF.acts||[]).indexOf(v)<0){ CONF.acts=(CONF.acts||[]).concat([v]);
+    CONF.u=Date.now(); idbSet('conf',CONF); edDraw(); selbarDraw(); }
+  atAdd(null,id,v);
 }
 function atAdd(ev,id,n){
   if(ev) ev.stopPropagation();
   var e=ent(id); if(!e) return;
   var a=(e.at||[]).slice();
   if(a.indexOf(n)>=0){ a.splice(a.indexOf(n),1);            /* もう付いてたら外す */
-    var x=(e.ax||[]).filter(function(y){ return y!==n; }); e.ax=x; }
+    e.ax=(e.ax||[]).filter(function(y){ return y!==n; }); }
   else a.push(n);
-  e.at=a;
-  if(a.length&&!e.c) e.c='b';                  /* やることが付いた＝これから何かする */
-  if(atDone(e)) e.c='g';
+  e.at=a; autoC(e);
   e.u=Date.now(); persist(); pushSoon(); colbar(); palClose(); atRedraw(id);
 }
 function atHtml(e){
   var a=e.at||[], x=e.ax||[];
   return a.map(function(n){
-    return '<span class="'+(x.indexOf(n)>=0?'dn':'')+'" onclick="atTog(event,\''+e.id+'\',\''+esc(n)+'\')">'
+    return '<span class="'+(x.indexOf(n)>=0?'dn':'')+'" onclick="atTog(event,\''+e.id+'\',\''+jsa(n)+'\')">'
       +esc(n)+'</span>'; }).join('')
     +'<span class="ad" onclick="atOpen(event,\''+e.id+'\')">＋やること</span>';
 }
@@ -989,9 +1153,43 @@ function selAct(n){
     if(ids.indexOf(e.id)<0) return;
     var a=(e.at||[]).slice();
     if(a.indexOf(n)<0) a.push(n);
-    e.at=a; if(!e.c) e.c='b'; e.u=Date.now();
+    e.at=a; autoC(e); e.u=Date.now();
   });
   persist(); pushSoon(); colbar(); draw();
+}
+
+/* ============ 分野タグもその場で足す ============ */
+function tgOpen(ev,id){
+  ev.stopPropagation();
+  var cell=ev.currentTarget.parentNode.parentNode;   /* .tags の親＝.c-title */
+  var was=cell.classList.contains('pk');
+  palClose();
+  if(was) return;
+  cell.classList.add('pk');
+  var s=[]; all().forEach(function(e){ (e.tag||[]).forEach(function(x){ if(s.indexOf(x)<0) s.push(x); }); });
+  var box=document.createElement('div');
+  box.className='pal apl tpl';
+  box.innerHTML='<b class="hd">タグ</b>'
+    +'<input class="nw" placeholder="打ってEnterで新しく作る" onclick="event.stopPropagation()"'
+    +' onkeydown="if(event.key===\'Enter\'){tgAdd(event,\''+id+'\',this.value)}">'
+    +s.map(function(n){
+      return '<span class="sw pl" onclick="tgAdd(event,\''+id+'\',\''+jsa(n)+'\')">'+esc(n)+'</span>'; }).join('');
+  cell.appendChild(box);
+}
+function tgAdd(ev,id,n){
+  if(ev){ ev.stopPropagation(); if(ev.preventDefault) ev.preventDefault(); }
+  n=String(n||'').trim(); if(!n) return;
+  var e=ent(id); if(!e) return;
+  var a=(e.tag||[]).slice(), i=a.indexOf(n);
+  if(i>=0) a.splice(i,1); else a.push(n);       /* 付いてたら外す。同じ操作で付け外し両方 */
+  e.tag=a; e.u=Date.now(); persist(); pushSoon(); palClose(); tags();
+  var row=document.querySelector('.row[data-id="'+id+'"]');
+  if(row){ var b=row.getElementsByClassName('tags')[0]; if(b) b.innerHTML=tgHtml(e); }
+}
+function tgHtml(e){
+  return (e.tag||[]).map(function(x){
+      return '<span onclick="tgAdd(event,\''+e.id+'\',\''+jsa(x)+'\')">'+esc(x)+'</span>'; }).join('')
+    +'<span class="ad" onclick="tgOpen(event,\''+e.id+'\')">＋タグ</span>';
 }
 
 /* ============ 星＝重要度（1〜5） ============
@@ -1045,6 +1243,17 @@ function selMode(){
 }
 function selIds(){ var a=[]; for(var k in SEL) if(SEL[k]) a.push(k); return a; }
 function selCnt(){ document.getElementById('selcnt').textContent=selIds().length+' 件'; }
+
+/* 選択中の帯のボタンも定義から作る。色を足せば、ここにも自動で増える */
+function selbarDraw(){
+  var c=document.getElementById('selcols'); if(!c) return;
+  c.innerHTML=CONF.cols.map(function(o){
+    return '<button class="sc-'+o.k+'" onclick="selColor(\''+jsa(o.k)+'\')">'+esc(o.n)+'</button>'; }).join('');
+  document.getElementById('selbds').innerHTML=CONF.bds.map(function(o){
+    return '<button class="sb-'+o.k+'" onclick="selBd(\''+jsa(o.k)+'\')">'+esc(o.n)+'</button>'; }).join('');
+  document.getElementById('selacts').innerHTML=(CONF.acts||[]).map(function(n){
+    return '<button onclick="selAct(\''+jsa(n)+'\')">＋'+esc(n)+'</button>'; }).join('');
+}
 
 function rowTap(ev,id,el){
   LASTID=id;
@@ -1193,9 +1402,14 @@ function splitSel(){
       if((e.at||[]).length){ g.at=e.at.slice(); g.ax=(e.ax||[]).slice(); } });
     trashIds([e.id]);
     for(var i=got.length-1;i>=0;i--) MEM.unshift(got[i]);
-    sortMem(); SEL={}; persist(); pushSoon();
-    draw(); tags(); colbar(); trCnt(); selCnt(); endAsk();
-    st(got.length+'個に分けた。元のブロックはゴミ箱にある');
+    sortMem();
+    /* 分けたあとは選んだままにしておく。どれが分けたやつかが一目で分かるし、
+       そのまま色でも枠線でも好きな印を1回で付けられる。何の印にするかは決めない。 */
+    SEL={}; got.forEach(function(g){ SEL[g.id]=true; });
+    persist(); pushSoon();
+    if(!SELMODE) selMode(); else { draw(); }
+    tags(); colbar(); bdbar(); trCnt(); selCnt(); endAsk();
+    st(got.length+'個に分けた。選んだままにしてある。印を付けるなら下の帯から');
   });
 }
 
@@ -1419,10 +1633,11 @@ function draw(){
   var L=all();
   L=L.filter(function(e){ return TRASH ? !!e.z : !e.z; });   /* z=1 はゴミ箱の中 */
   /* 絞り込みが効いてる最中は区切り線を出さない。範囲の意味が壊れるから */
-  var seps=(active===null&&activeC===null&&activeS===null&&!activeI)?L.filter(isSep):[];
+  var seps=(active===null&&activeC===null&&activeB===null&&activeS===null&&!activeI)?L.filter(isSep):[];
   L=L.filter(function(e){ return !isSep(e); });
   var list=active?L.filter(function(e){return (e.tag||[]).indexOf(active)>=0;}):L;
   if(activeC!==null) list=list.filter(function(e){ return (e.c||'')===activeC; });
+  if(activeB!==null) list=list.filter(function(e){ return (e.bd||'')===activeB; });
   if(activeI) list=list.filter(function(e){ return !!e.im; });
   if(activeS!==null) list=list.filter(function(e){ var s=e.s||0;
     return activeS===0 ? s===0 : s>=activeS; });
@@ -1431,7 +1646,7 @@ function draw(){
   DAYS=dayMap(list); var DM=DAYS;  /* 線に属するブロックは、線が決めた日付で見せる */
   document.getElementById('rows').innerHTML = list.map(function(e){
     if(isSep(e)) return sepHtml(e);
-    var tg=(e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
+    var tg=tgHtml(e);
     var c=e.c||'';
     var B=function(f){ return '<button class="cp'+(f==='g'?' cpt':'')+'" onclick="cp(event,\''+e.id+'\',\''+f+'\')">⧉</button>'; };
     var sl=SELMODE&&SEL[e.id];
@@ -1439,7 +1654,7 @@ function draw(){
     var sv=e.s||0;
     var stx='<span class="stx">'+[1,2,3,4,5].map(function(k){
       return '<i class="'+(k<=sv?'f':'')+'" onclick="setS(event,\''+e.id+'\','+k+')">★</i>'; }).join('')+'</span>';
-    return '<div class="row'+(c?' k-'+c:'')+(sl?' sel':'')+'" data-id="'+e.id+'" onclick="rowTap(event,\''+e.id+'\',this)">'
+    return '<div class="row'+(c?' k-'+c:'')+(e.bd?' b-'+e.bd:'')+(sl?' sel':'')+'" data-id="'+e.id+'" onclick="rowTap(event,\''+e.id+'\',this)">'
       +'<div class="c-date'+(e.im?' im':'')+'">'
         +'<span class="dtx" onclick="setIm(event,\''+e.id+'\')">'+esc(DM[e.id]||e.d)+'</span>'
         +'<span class="tmx">'+esc(tmOf(e))+'</span>'+stx
@@ -1447,7 +1662,7 @@ function draw(){
       +'<div class="c-title">'+ck+B('t')
         +'<span class="ch'+(c?' ch-'+c:'')+'" onclick="palOpen(event,\''+e.id+'\')"></span>'+esc(e.t)
         +'<div class="atg">'+atHtml(e)+'</div>'
-        +'<div class="tags">'+tg+B('g')+'</div></div>'
+        +'<div class="tags">'+B('g')+tg+'</div></div>'
       +'<div class="c-org">'+B('org')+md(e.org)+'</div>'
       +'<div class="c-raw">'+B('raw')+md(e.raw)+'</div></div>';
   }).join('') || '<div class="empty">まだ何もない</div>';
@@ -1456,7 +1671,7 @@ function draw(){
 function tags(){
   var s=[]; all().forEach(function(e){(e.tag||[]).forEach(function(x){if(s.indexOf(x)<0)s.push(x);});});
   document.getElementById('tagbar').innerHTML='<button class="on" onclick="pick(null,this)">全部</button>'
-    +s.map(function(x){return '<button onclick="pick(\''+x+'\',this)">'+esc(x)+'</button>';}).join('');
+    +s.map(function(x){return '<button onclick="pick(\''+jsa(x)+'\',this)">'+esc(x)+'</button>';}).join('');
 }
 function pick(x,b){ active=x; draw(); toBottom();
   var bs=document.getElementById('tagbar').getElementsByTagName('button');
@@ -1467,9 +1682,9 @@ function colbar(){
   var L=all(), n={}, im=0;
   L.forEach(function(e){ if(isSep(e)) return; var k=e.c||''; n[k]=(n[k]||0)+1; if(e.im) im++; });
   var h='<button class="'+(activeC===null&&!activeI?'on':'')+'" onclick="pickC(null,this)">全部</button>';
-  h+=COL.map(function(c){
-    return '<button class="'+(!activeI&&activeC===c.k?'on':'')+'" onclick="pickC(\''+c.k+'\',this)">'
-      +c.n+' '+(n[c.k]||0)+'</button>'; }).join('');
+  h+=CONF.cols.map(function(c){
+    return '<button class="'+(!activeI&&activeC===c.k?'on':'')+'" onclick="pickC(\''+jsa(c.k)+'\',this)">'
+      +esc(c.n)+' '+(n[c.k]||0)+'</button>'; }).join('');
   h+='<button class="'+(activeI?'on':'')+'" onclick="pickI(this)">重要 '+im+'</button>';
   document.getElementById('colbar').innerHTML=h;
   starbar();   /* 星の帯も一緒に更新する。呼ぶ場所を増やさないため */
@@ -1489,8 +1704,8 @@ document.addEventListener('keydown',function(ev){
   if(tn==='TEXTAREA'||tn==='INPUT') return;
   if(ev.key==='5'){ ev.preventDefault(); setIm(null,LASTID); return; }   /* 5＝重要の付け外し */
   var i='1234'.indexOf(ev.key);
-  if(i<0) return;
-  ev.preventDefault(); setC(null,LASTID,COL[i].k);
+  if(i<0||!CONF.cols[i]) return;
+  ev.preventDefault(); setC(null,LASTID,CONF.cols[i].k);
 });
 function toBottom(){ var f=document.getElementById('feed'); f.scrollTop=f.scrollHeight; }
 
@@ -1613,7 +1828,7 @@ function Clamp(){ var r=document.getElementById('rows'),b=document.getElementByI
    タグ・色・星・設定・GitHub を、それぞれ畳めるようにする。
    これから乗せるものが増えていくので、最初から畳める形にしておく。
    開いてるか閉じてるかは端末に覚えさせる（同期はしない。端末ごとの見た目の話だから）。 */
-var SECS=['sTag','sCol','sStar','sCfg','sGh'];
+var SECS=['sTag','sCol','sBd','sDef','sStar','sCfg','sGh'];
 var SECDEF='sTag,sCol,sStar';        /* 何も覚えてないときに開いておく段 */
 function secOn(){ var v=LS(KEY.sec); return (v===null||v===undefined?SECDEF:v).split(','); }
 function secDraw(){
@@ -1706,8 +1921,14 @@ idbOpen().then(function(){ return idbGet('entries'); }).then(function(v){
   return idbGet('del');
 }).then(function(d){
   DEL=d||[];
+  return idbGet('conf');
+}).then(function(cf){
+  if(cf&&cf.cols) CONF=cf;                 /* 前に自分で作った定義があればそれを使う */
+  if(!CONF.bds) CONF.bds=[];
+  if(!CONF.acts) CONF.acts=[];
+  colCss(); edDraw(); selbarDraw();
   scrubTags(); mvRed();
-  persist(); tags(); colbar(); trCnt(); draw(); toBottom();
+  persist(); tags(); colbar(); bdbar(); trCnt(); draw(); toBottom();
   if(ghOn()) sync(true); else syst('GitHub未設定（この端末にだけ保存中）');
 });
 document.getElementById('src').addEventListener('keydown',function(ev){
