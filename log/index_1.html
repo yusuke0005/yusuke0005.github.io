@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=6, user-scalable=yes">
+<title>思考ログ</title>
+<!-- ============================================================
+     モバイルで壊れない制約（厳守）
+     position:fixed なし / position:sticky なし / canvas なし
+     infinite animation なし / backdrop-filter なし
+     filter:drop-shadow なし / 大きな blur 影なし
+     requestAnimationFrame ループなし / 外部CDNなし
+     固定表示は flex で作る（左レール / 右本体＝流れる本体＋下入力）
+     flex の子には min-height:0 を必ず付ける（無いとAndroidで入力欄が画面外に落ちる）
+     ============================================================ -->
+<style>
+  *{box-sizing:border-box;-webkit-text-size-adjust:none}
+  html,body{margin:0;padding:0;height:100%;background:#f4f4f2;color:#16150f}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+       display:flex;flex-direction:row;height:100vh;height:100dvh;overflow:hidden}
+
+  /* ---- 左：縦の操作レール。閉じてれば44px、開くと200px ---- */
+  .rail{flex:0 0 44px;width:44px;background:#26251b;color:#f4f4f2;overflow-y:auto;overflow-x:hidden;
+        display:flex;flex-direction:column;min-height:0}
+  .rail.open{flex:0 0 200px;width:200px}
+  /* フル画面：レールを18pxの細い帯にして、解除ボタンだけ残す */
+  body.full .rail{flex:0 0 18px;width:18px;overflow:hidden;background:#c8a03c}
+  body.full .rail>*{display:none}
+  body.full .rail #bFull{display:block;width:18px;height:100%;margin:0;padding:8px 0;
+        background:#c8a03c;color:#16150f;border-radius:0;font-size:10px;line-height:1.1;
+        writing-mode:vertical-rl;text-orientation:upright}
+  .rail button{font:inherit;font-size:11px;line-height:1.3;background:#3a382c;color:#f4f4f2;border:0;
+               border-radius:3px;padding:6px 2px;margin:3px;cursor:pointer;-webkit-appearance:none;
+               display:block;width:calc(100% - 6px);text-align:center}
+  .rail button.on{background:#c8a03c;color:#16150f}
+  /* 同期の状態。黙って失敗させない */
+  .rail button.wait{background:#8a6f1e;color:#fff}   /* 送信待ち */
+  .rail button.bad{background:#c0392b;color:#fff}    /* 失敗。押せば再送 */
+  .rail button.okk{background:#2f6b3f;color:#fff}    /* 上がった */
+  .rail .cnt{font-size:10px;opacity:.5;text-align:center;padding:4px 2px}
+  .rail .sp{height:8px}
+  .panel{display:none;padding:4px 6px 10px;font-size:12px;color:#8a8775;border-top:1px solid #3a382c;margin-top:6px}
+  .rail.open .panel{display:block}
+  .panel h4{margin:8px 0 3px;font-size:10px;letter-spacing:.06em;color:#6b6957;font-weight:600;
+            cursor:pointer;padding:3px 0;border-bottom:1px solid #3a382c}
+  .panel h4 i{display:inline-block;width:1.2em;font-style:normal;color:#8a8775}
+  .sec{display:none}
+  .sec.on{display:block}
+  .panel input{font:inherit;font-size:13px;background:#1d1c14;color:#e8e6dc;border:1px solid #3a382c;
+               border-radius:3px;padding:5px 6px;margin:3px 0;width:100%;-webkit-appearance:none}
+  .panel button{width:calc(100% - 6px)}
+  .panel .tg button{border-radius:11px;text-align:left;padding:5px 8px}
+  .panel .msg{font-size:11px;line-height:1.5;word-break:break-all;margin-top:6px;max-height:26vh;overflow:auto}
+
+  /* ---- 右：本体 ---- */
+  .main{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column}
+  /* min-height:0 が無いとAndroidで中身がはみ出して下の入力欄が画面外に落ちる */
+  .feed{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;
+       touch-action:pan-x pan-y;overscroll-behavior-x:contain}
+  /* overscroll-behavior-x ＝ 横に2本指で払ったときにブラウザの「戻る」に取られないようにする。
+     これが無いと、横に動かしたつもりが前のページに飛ぶ */
+  .feed #zoom,.feed .sheet,.feed .rows,.feed .row,.feed .row>div{touch-action:pan-x pan-y}
+  /* touch-action:pan-x pan-y ＝ スクロールは残してピンチだけ自前で拾う。
+     Android は子要素にも効かせないとブラウザ側のピンチに持っていかれる */
+
+  /* ---- 表。font-size 1本で全部が比例して拡大縮小する ---- */
+  /* 左右に1.2emずつ空ける。ここは区切り線が表からはみ出すための場所。
+     見出しと表の両方を同じだけずらしたいので、外側で一度に持たせる。
+     ※ 表そのものは62em。外の余白を足して 62+1.2×2＝64.4em。
+        列を足す/減らすときは、この64.4と Zfit の除数を必ず一緒に直す。 */
+  #zoom,#zhead{font-size:16px;padding:0 1.2em}
+  .sheet{width:62em;margin:0 auto;padding:0 0 1.2em}
+  @media (max-width:640px){ .sheet{margin:0} }
+  .head{display:flex;background:#e2e0d6;border-bottom:1px solid #b9b6a5;
+        font-size:.68em;letter-spacing:.08em;color:#5c5a48;font-weight:600;width:62em;margin:0 auto}
+  @media (max-width:640px){ .head{margin:0} }
+  .head div{padding:.4em .6em;border-right:1px solid #cbc8b8}
+  .head div:last-child{border-right:0}
+  .rows{border-bottom:1px solid #b9b6a5;background:#fff}
+  .row{display:flex;border-bottom:1px solid #ddd9c9;cursor:pointer}
+  .row:last-child{border-bottom:0}
+  .row:nth-child(even){background:#fbfaf6}
+  .row.open{background:#fffdf2}
+  .row>div{padding:.5em .6em;border-right:1px solid #ececdf;overflow:hidden;min-width:0}
+  .row>div:last-child{border-right:0}
+  .c-date{width:5em;flex:0 0 5em;font-size:.72em;color:#8a8775;line-height:1.5;padding-top:.75em}
+  .c-title{width:12em;flex:0 0 12em;font-size:.8em;font-weight:600;line-height:1.45}
+  .c-org{width:24em;flex:0 0 24em;font-size:.78em;line-height:1.62}
+  .c-raw{width:21em;flex:1 1 21em;font-size:.74em;line-height:1.6;color:#5d5b4c}
+  .clamp .c-org,.clamp .c-raw{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}
+  .row.open .c-org,.row.open .c-raw{display:block;-webkit-line-clamp:none}
+  .c-org strong{font-weight:700}
+  .c-org mark{background:#ffe9a3;color:inherit;padding:0 .1em}
+  .c-org .h{display:block;font-weight:700;margin:.5em 0 .1em;color:#3a382c}
+  .c-org .li{display:block;padding-left:1em;text-indent:-1em}
+
+  /* ---- 色＝このあと何をするか。ブロック全体を薄く染める。無色＝まだ仕分けてない ---- */
+  .row.k-b,.row.k-b:nth-child(even){background:#e4edfb}   /* 青＝これから何かする */
+  .row.k-g,.row.k-g:nth-child(even){background:#e6f2e9}   /* 緑＝済んだ */
+  .row.k-x,.row.k-x:nth-child(even){background:#efede5;color:#a8a696}  /* 灰＝要らない */
+  .row.k-x .c-org,.row.k-x .c-raw,.row.k-x .c-title{opacity:.55}
+  .row.open{box-shadow:inset .18em 0 0 #c8a03c}
+  /* ---- 重要＝日付の欄だけ赤くする。ブロックの色（このあと何をするか）とぶつからないように場所を分ける ---- */
+  .c-date.im{background:#fbe6e3;border-radius:.2em}
+  .dtx{cursor:pointer}
+  /* 色を選ぶ丸ボタン（タイトルの左肩） */
+  .ch{display:inline-block;width:.9em;height:.9em;border-radius:50%;margin:0 .35em 0 0;
+      vertical-align:-.05em;background:#fff;box-shadow:inset 0 0 0 1px #b9b6a5;cursor:pointer}
+  .ch.ch-b{background:#3b7dd8;box-shadow:none}
+  .ch.ch-g{background:#4a9d5f;box-shadow:none} .ch.ch-x{background:#b9b6a5;box-shadow:none}
+  .c-title.pk{overflow:visible;position:relative;z-index:6}
+  .pal{position:absolute;left:.2em;top:1.6em;width:10.5em;background:#fff;border:1px solid #b9b6a5;
+       border-radius:.2em;overflow:hidden}
+  .pal .sw{display:block;height:2em;line-height:2em;font-size:.7em;font-weight:600;
+           padding-left:.6em;white-space:nowrap;color:#fff}
+  .pal .sw.s0{background:#fff;color:#8a8775} .pal .sw.s1{background:#3b7dd8}
+  .pal .sw.s2{background:#4a9d5f} .pal .sw.s3{background:#b9b6a5}
+  /* ---- 星＝重要度。色（次に何をやるか）とは別の軸。日付の下に置く ---- */
+  /* 5つ確実に入るように、星1つぶんの幅を決め打ちする。
+     ★ の実際の字幅はフォント任せなので、幅を指定しないと端末によって5つ目がはみ出て消える。 */
+  .tmx{display:block;color:#6b6957;font-weight:600;letter-spacing:.04em}
+  /* ---- 通し番号とリンク ---- */
+  .nox{display:block;margin-top:.25em;color:#9a9784;font-size:.8em;cursor:pointer}
+  .lk{color:#2f6fb0;border-bottom:1px solid #a8c6e4;cursor:pointer}
+  .row.hit{background:#fff3c4;transition:background .4s}
+  .stx{display:block;margin-top:.3em;white-space:nowrap}
+  .stx i{display:inline-block;width:1.02em;font-style:normal;font-size:.88em;line-height:1;
+         text-align:center;color:#e2dfd0;cursor:pointer}
+  .stx i.f{color:#c8a03c}
+  /* ---- タグは2段。上＝行動（このブロックで何をするか）。下＝分野（何の話か） ----
+     行動タグは消さない。済んだら取り消し線にする。消すと「何をした話だったか」が消えるから。
+     分野タグは色を変えても残る履歴。だから見た目は地味でいい。 */
+  .atg{margin-top:.4em}
+  .atg span{display:inline-block;font-size:.85em;background:#dbe6f7;color:#2f5d9e;
+            border:1px solid #b9cbe6;border-radius:2px;padding:0 .35em;margin:0 .25em .2em 0;cursor:pointer}
+  .atg span.dn{background:#efede5;color:#a8a696;border-color:#ddd9c9;text-decoration:line-through}
+  .atg .ad{background:#f0eee4;color:#7d7b6a;border-color:#ddd9c9;font-weight:600}
+  .pal.apl{width:9em;top:3.4em}
+  .pal.apl .sw{background:#fff;color:#2f5d9e;height:1.9em;line-height:1.9em}
+  .tags{margin-top:.4em}
+  .tags span{display:inline-block;font-size:.85em;background:#eceadd;color:#6b6957;
+             border-radius:2px;padding:0 .35em;margin:0 .25em .2em 0}
+  .cp{float:right;font:inherit;font-size:.8em;line-height:1.2;color:#7d7b6a;background:#f0eee4;
+      border:1px solid #ddd9c9;border-radius:2px;padding:0 .35em;margin:0 0 .2em .3em;
+      cursor:pointer;-webkit-appearance:none}
+  .cp.ok{background:#c8a03c;color:#16150f;border-color:#c8a03c}
+  /* 畳んでるとき、整理と原文の中身は -webkit-box になる。
+     その中で float:right を使うと iOS では横幅いっぱいに伸びてしまう。
+     だからこの2つのコピーボタンだけは float をやめて、右上に置いて場所を空ける。 */
+  .c-org,.c-raw{position:relative;padding-right:2.1em}
+  .c-org>.cp,.c-raw>.cp{position:absolute;float:none;top:.35em;right:.35em;margin:0;z-index:3}
+  .cpt{float:none;display:inline-block;margin:0 0 .2em 0}
+  .del{float:right;font-size:.8em;color:#c0392b;opacity:.3;padding:0 .2em;margin-left:.3em}
+  .empty{padding:2em .8em;color:#8a8775;font-size:.85em;text-align:center;background:#fff}
+
+  /* ---- 区切り線。灰＝1日の区切り / 桃＝しおり ---- */
+  /* 区切り線は表の横幅より左右にはみ出させる。表の中で止まってると見過ごすから。
+     はみ出す量は外の余白と同じ1.2em。ただしここは font-size:.7em なので、
+     1.2em ぶん出すには 1.2÷0.7＝1.714em と書く必要がある。 */
+  .sep{display:flex;align-items:center;gap:.5em;padding:.5em .6em;background:#f2f0e6;
+       margin:0 -1.714em;border-bottom:1px solid #ddd9c9;font-size:.7em;color:#16150f}
+  /* 1日の区切りは黒でバシッと。灰色だと見過ごす。栞（桃）だけ色を上書きする */
+  .sep .ln{flex:1 1 auto;height:.28em;background:#16150f}
+  .sep b{flex:0 0 auto;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .sep button{flex:0 0 auto;font:inherit;font-size:.95em;background:#fff;color:#5c5a48;
+              border:1px solid #b9b6a5;border-radius:.25em;padding:.15em .6em;
+              cursor:pointer;-webkit-appearance:none}
+  .sep input.dt{font:inherit;font-size:1em;color:inherit;background:#fff;border:1px solid #b9b6a5;
+                border-radius:.25em;padding:.1em .35em;-webkit-appearance:none;
+                min-width:8.6em;text-align:center}
+  .sep-b{background:#fdeef3;border-bottom-color:#f0cddb;color:#a8547a}
+  .sep-b .ln{background:#e08aa8}
+  .sep-b button{border-color:#e08aa8;color:#a8547a}
+
+  /* ---- 複数選択 ---- */
+  .ck{display:inline-block;width:1em;height:1em;border-radius:.15em;margin:0 .35em 0 0;
+      vertical-align:-.1em;background:#fff;box-shadow:inset 0 0 0 1px #8a8775;cursor:pointer}
+  .ck.on{background:#c8a03c;box-shadow:inset 0 0 0 1px #8a6f1e}
+  .row.sel{box-shadow:inset 0 0 0 .14em #c8a03c}
+  .selbar{display:none;margin-bottom:6px;background:#26251b;border:1px solid #3a382c;border-radius:5px;
+          padding:5px 6px;color:#cfcdbd;font-size:12px}
+  .selbar.on{display:block}
+  .selbar b{color:#c8a03c;font-weight:600;margin-right:6px}
+  .selbar button{font:inherit;font-size:12px;background:#3a382c;color:#f4f4f2;border:0;border-radius:3px;
+                 padding:4px 8px;margin:2px 3px 2px 0;cursor:pointer;-webkit-appearance:none}
+  .selbar button.b{background:#3b7dd8} .selbar button.r{background:#d0342c}
+  .selbar button.g{background:#4a9d5f} .selbar button.x{background:#b9b6a5;color:#16150f}
+  .selbar button.n{background:#f4f4f2;color:#16150f}
+  .selbar button.s{background:#c8a03c;color:#16150f} .selbar button.s0{background:#4a4838}
+  .selbar button.warn{background:#c0392b}
+
+  /* ---- 下：入力。ここも出しっぱなし ---- */
+  .in{flex:0 0 auto;background:#16150f;padding:7px 8px 8px;border-top:1px solid #3a382c}
+  .prev{margin-bottom:6px;background:#0e0d08;color:#cfcdbd;border:1px solid #3a382c;border-radius:4px;
+        padding:7px;font-size:12.5px;line-height:1.55;white-space:pre-wrap;max-height:26vh;overflow:auto}
+  .inrow{display:flex;align-items:flex-end;gap:6px}
+  .in textarea{flex:1 1 auto;height:64px;font:16px/1.55 inherit;color:#f4f4f2;background:#26251b;
+               border:1px solid #3a382c;border-radius:6px;padding:8px;resize:vertical;-webkit-appearance:none}
+  .in textarea::placeholder{color:#6b6957}
+  .in .send{flex:0 0 auto;font:inherit;font-size:15px;font-weight:600;background:#c8a03c;color:#16150f;
+            border:0;border-radius:6px;padding:11px 18px;cursor:pointer;-webkit-appearance:none}
+  .in .send:disabled{background:#4a4838;color:#8a8775}
+  .st{display:block;color:#c8a03c;font-size:12px;margin-top:4px;min-height:1em}
+</style>
+</head>
+<body>
+
+<!-- ============ 左：操作レール（閉じて44px / 開いて200px） ============ -->
+<div class="rail" id="rail">
+  <button id="rt" onclick="railT()">☰</button>
+  <div class="sp"></div>
+  <button onclick="Z(-1)">−</button>
+  <button onclick="Z(1)">＋</button>
+  <button onclick="Zfit()">全</button>
+  <button onclick="Zorg()">整</button>
+  <div class="sp"></div>
+  <button onclick="addSep('d')">区</button>
+  <button onclick="addSep('b')">栞</button>
+  <button id="bSel" onclick="selMode()">選</button>
+  <button id="bTr" onclick="trashView()">🗑</button>
+  <button id="bClamp" onclick="Clamp()">畳</button>
+  <button id="bSy" onclick="sync()">同</button>
+  <div class="sp"></div>
+  <button id="bFull" onclick="Full()">⛶</button>
+  <button onclick="reload()">↻</button>
+  <div class="cnt" id="cnt"></div>
+  <div class="cnt" id="ver"></div>
+
+  <!-- 各段は h4 を押すと開け閉めできる。開いてるか閉じてるかは端末に覚えさせる。
+       これから乗せるものが増えても、この形なら縦に伸び続けない -->
+  <div class="panel">
+    <h4 onclick="secT('sTag')"><i id="m_sTag">−</i>タグ</h4>
+    <div class="sec" id="sTag"><div class="tg" id="tagbar"></div></div>
+
+    <h4 onclick="secT('sCol')"><i id="m_sCol">−</i>色</h4>
+    <div class="sec" id="sCol"><div class="tg" id="colbar"></div></div>
+
+    <h4 onclick="secT('sStar')"><i id="m_sStar">−</i>星</h4>
+    <div class="sec" id="sStar"><div class="tg" id="starbar"></div></div>
+
+    <h4 onclick="secT('sCfg')"><i id="m_sCfg">＋</i>設定</h4>
+    <div class="sec" id="sCfg">
+      <input id="key" type="password" placeholder="APIキー">
+      <input id="mdl" placeholder="ふだんのモデル（安いほう）">
+      <input id="mdl2" placeholder="まとめ用モデル（賢いほう）">
+      <button onclick="saveCfg()">保存</button>
+      <button onclick="models()">使えるモデル</button>
+      <button onclick="test()">テスト</button>
+      <button onclick="dump()">全部をJSONでコピー</button>
+      <div class="msg" id="cst"></div>
+    </div>
+
+    <h4 onclick="secT('sGh')"><i id="m_sGh">＋</i>GitHub（同期）</h4>
+    <div class="sec" id="sGh">
+      <input id="ghr" placeholder="yusuke0005/log-data">
+      <input id="ght" type="password" placeholder="GitHubトークン">
+      <button onclick="saveGh()">保存して同期</button>
+      <div class="msg" id="sy"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 右：本体（流れる本体＋下入力） ============ -->
+<div class="main">
+
+  <div class="feed" id="feed">
+    <div id="zoom">
+      <div id="zhead">
+        <div class="head">
+          <div class="c-date">日付・時刻</div><div class="c-title">タイトル</div>
+          <div class="c-org">整理</div><div class="c-raw">言語化（原文）</div>
+        </div>
+      </div>
+      <div class="sheet">
+        <div class="rows clamp" id="rows"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="in">
+    <div class="selbar" id="selbar">
+      <b id="selcnt">0 件</b>
+      <button class="b" onclick="selColor('b')">青</button>
+      <button class="g" onclick="selColor('g')">緑</button>
+      <button class="x" onclick="selColor('x')">灰</button>
+      <button class="n" onclick="selColor('')">無色</button>
+      <button class="r" onclick="selIm(1)">重要</button>
+      <button class="n" onclick="selIm(0)">重要↓</button>
+      <button onclick="selAct('AI壁打ち')">＋AI壁打ち</button>
+      <button onclick="selAct('下書きを進める')">＋下書き</button>
+      <button onclick="selAct('調べる')">＋調べる</button>
+      <button onclick="selAll()">全選択</button>
+      <button onclick="selClear()">解除</button>
+      <button class="s" onclick="selStar(1)">★1</button>
+  <button class="s" onclick="selStar(2)">★2</button>
+  <button class="s" onclick="selStar(3)">★3</button>
+  <button class="s" onclick="selStar(4)">★4</button>
+  <button class="s" onclick="selStar(5)">★5</button>
+  <button class="s0" onclick="selStar(0)">★消</button>
+  <button id="bSplit" onclick="splitSel()">分割</button>
+      <button id="bJoin" onclick="joinSel()">連結</button>
+      <button id="bCpOrg" onclick="copyOrg(this)">整理をコピー</button>
+      <button id="bToTr" onclick="toTrash()">🗑 ゴミ箱へ</button>
+      <button id="bBack" onclick="unTrash()" style="display:none">戻す</button>
+      <button class="warn" id="bPurge" onclick="purge(this)" style="display:none">完全に削除</button>
+      <button onclick="selMode()">選択おわり</button>
+    </div>
+    <div class="prev" id="prev" style="display:none"></div>
+    <div class="inrow">
+      <textarea id="src" placeholder="ここに喋る。音声入力でそのまま流し込んでいい。話題が何個混ざっててもいい。"></textarea>
+      <button class="send" id="btn" onclick="run()">整理</button>
+    </div>
+    <span class="st" id="st"></span>
+  </div>
+
+</div>
+
+<script>
+/* ============ 焼き込みデータ（PCでもiPhoneでも必ず見えるぶん） ============ */
+var SEED = [
+{ id:"s1", d:"2026-07-31", t:"Notionでは俯瞰できない。だから自分で作る", tag:["システム"],
+  org:"**Notionでは俯瞰できないから、自作に切り替える。**\n\nNotionのデータベースはテキスト列に装飾が入らない。ノーマルテーブルなら装飾は入るが表として使えない。どちらにしてもNotionは俯瞰できない設計になっている。\n\n# 譲れない条件\n・==とにかく俯瞰して見たい==\n・iPhoneでもPCと同じように見たい\n・ズームイン・ズームアウトできるようにする\n・カード形式にしても余白はあまりつけない。**繋がってる感**を出す",
+  raw:"そっか。Notionのデータベースだと、それが表になっていかないんだな。だからやっぱりいいわ。自作で作ったノートアプリに全部溜めていこう。\niPhoneとかで見たときも、PCと同じような感じで見たい。俯瞰して見たいから、ズームイン・ズームアウトできるような感じにしてほしい。とにかく俯瞰して見たいんだ。Notionとかだと俯瞰できないからさ、そういう設計になってんじゃん。あれが俺、許せないから。\nあと、カード形式にするにしても、余白はあんまつけないでほしい。ちゃんと繋がってる感は出したいから。" }
+];
+
+var KEY={k:'log_key',m:'log_mdl',m2:'log_mdl2',e:'log_entries',f:'log_fs',nt:'log_nothink',
+         gt:'log_gh_token',gr:'log_gh_repo',dr:'log_draft',sec:'log_sec'};
+/* モデルは2つ持つ。ふだんの整理は安いほう、まとめみたいに頭を使うところだけ賢いほう。
+   Google側は「-latest」の名前を使う。番号で固定すると、その世代が新規に閉じられた日に
+   404で全部止まる（2.5がそうなった）。-latest なら世代が上がってもそのまま通る。 */
+var DEF_A='claude-haiku-4-5';         /* Anthropic・ふだん */
+var DEF_A2='claude-sonnet-4-5';       /* Anthropic・まとめ */
+var DEF_G='gemini-flash-latest';      /* Google・ふだん */
+var DEF_G2='gemini-pro-latest';       /* Google・まとめ */
+/* もう叩けない世代。入っていたら起動時に今の名前へ寄せる */
+var DEAD=/^gemini-(1\.|2\.)/;
+function LS(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
+function isAnth(k){ return String(k||'').indexOf('sk-ant')===0; }
+function defMdl(){ return isAnth(LS(KEY.k))?DEF_A:DEF_G; }
+function defMdl2(){ return isAnth(LS(KEY.k))?DEF_A2:DEF_G2; }
+/* 使うモデル名。heavy＝まとめ側。まとめ側が空なら、ふだんのほうを使う（増やす前と同じ動き） */
+function mdlOf(heavy){
+  if(heavy) return LS(KEY.m2)||LS(KEY.m)||defMdl2();
+  return LS(KEY.m)||defMdl();
+}
+/* 向こうの都合で一時的にダメなやつ。こっちのコードは何も悪くないし、直しようも無い。
+   503＝混んでる。500/502/504＝向こうが転んでる。どれも「待ってもう一回投げる」が正解。
+   だから止めずに自分で投げ直す。人間が待って押し直す作業をアプリにやらせる */
+function BUSY(c){ return c===500||c===502||c===503||c===504; }
+var WAITS=[3,8,20];   /* 何秒待つか。混雑は数秒で抜けることが多いので、短く始めて伸ばす */
+
+/* ============ プロンプト ============ */
+/* 整理本文の書式（P と PSPLIT で共通） */
+var FMT =
+"整理本文の書式（ここが最重要。パッと見て内容が分かることを最優先にする）：\n"+
+"1行目に、その話題の結論を **太字の一文** で書く。\n"+
+"次の行を空けて、2〜3文の説明を書く。ここは箇条書きにしない。\n"+
+"そこから先は、内容に合わせて見出しを自分で作る。行頭に「# 」を付ける。見出しの文言は原文の中身から作ること（決まった見出し名は無い）。見出しは3〜6個が目安。\n"+
+"各見出しの下は、まず1〜3文の説明を書き、そのうえで並列に並ぶものだけを行頭「・」の箇条書きにする。全部を箇条書きにしない。逆に全部を文章にもしない。説明するところは説明し、並ぶところは並べる。\n"+
+"原文で話が進んだ順（時系列・段階・日付）は崩さない。段階や日程があるものは、その順に並べる。\n"+
+"日付・数字・固有名詞・金額・地名は一字も落とさない。\n"+
+"本人が決めたこと・判断したこと・譲れない基準は **太字** にする。その話題で最も重要な一文だけ ==マーカー== で囲む（1話題につき1〜2箇所まで、それ以上は使わない）。\n"+
+"箇条書きの項目に見出しを付けたいときは「・**項目名**：説明」の形にしてよい。\n"+
+"短い独り言で構造が要らないときは、無理に見出しを作らない。太字の一文＋説明だけで終えてよい。\n";
+
+var P =
+"以下は本人が頭の中をそのまま吐き出したテキストです。\n"+
+"これを、あとから読み返した本人が「自分は何を言っていたか」を一瞬で思い出せる形に整えてください。要約ではなく整理です。内容は減らさない。書かれていないことは足さない。一般論・きれいごと・あなたの意見・評価は一切書かない。本人の言葉づかいを残すこと。\n\n"+
+"**話題がいくつ混ざっていても、絶対に分割しないこと。1回の入力は1つのブロックにまとめる。** 分けるかどうかは本人があとで決める。\n"+
+"次の形式だけを出力してください。前置き・あとがき・説明は一切書かないこと。\n\n"+
+"###T### （全体を表す具体的なタイトル。20字前後。話題が複数あるなら、まとめて言い表すタイトルにする）\n"+
+"###G### （タグ。次から1〜3個をカンマ区切り: アイデア,仕事・キャリア,価値観・生き方,悩み・モヤモヤ,学び,プロジェクト,トレーニング,アスリート,FX,システム,生活）\n"+
+"###O###\n"+
+"（整理本文。下の書式に従う）\n"+
+"###E###\n\n"+
+FMT;
+
+/* 分割用。押したときだけ話題ごとに割る。###F### は原文を切り分ける目印 */
+var PSPLIT =
+"以下は本人が1つのブロックにまとめて書いたテキストです。話題ごとに区切ってください。\n"+
+"本人はこれを分けたくてボタンを押しています。だから必ず2つ以上に分けること。「分けられない」は答えになりません。\n"+
+"話が1本に見えても、必ずどこかに切れ目があります。話題・時間・対象・目的、どれかが変わったところで割る。\n"+
+"はっきりした切り替わりが見つからないときは、内容のまとまりで区切ってよい。長い1本なら段落のまとまりで割る。\n"+
+"分けすぎを恐れないこと。細かすぎたら本人があとで連結し直せます。\n"+
+"話題ごとに、次の形式だけを出力してください。前置き・あとがき・説明は一切書かないこと。\n\n"+
+"###T### （その話題を表す具体的なタイトル。20字前後）\n"+
+"###G### （タグ。次から1〜2個をカンマ区切り: アイデア,仕事・キャリア,価値観・生き方,悩み・モヤモヤ,学び,プロジェクト,トレーニング,アスリート,FX,システム,生活）\n"+
+"###F### （その話題が始まる箇所の原文を、先頭から15文字ちょうどコピーして貼る。一字一句変えないこと）\n"+
+"###O###\n"+
+"（整理本文。元のブロックと同じ書式に従う）\n"+
+"###E###\n\n"+
+FMT;
+
+/* まとめ用。区切り線の「前日のまとめ」を押したとき、その区切りまでの範囲に使う。
+   これは要約じゃなくて目次。中身は元のブロックに全部あるので、言い直させない。
+   「その日どんな話を書いたか」が一目で分かって、詳しく知りたくなったら
+   元のブロックを探しに行ける、という形にする。だから FMT（整理本文の書式）は使わない。 */
+var PDAY =
+"以下は本人がその範囲のあいだに書き残したブロックです（古い順）。\n"+
+"これを読み返すための「目次」を作ってください。要約ではありません。中身の言い直しでもありません。\n"+
+"本人は詳しい中身を元のブロックで既に持っています。だから同じことをもう一度書かれても頭に入りません。\n"+
+"必要なのは『その日、何について書いたのか』が一目で分かることです。\n\n"+
+"守ること：\n"+
+"・1行1件の箇条書きにする。1行は20〜40字。説明を足さない。\n"+
+"・各行のいちばん頭に、その話が書いてあるブロックの番号を #12 の形で付ける。材料の頭に書いてある番号をそのまま使う。番号を作らない。複数にまたがるなら #12 #15 のように並べる。\n"+
+"・書かれた話題は全部拾う。数が多くても落とさない。\n"+
+"・似た話題はまとめて見出しの下に並べる。見出しは中身から自分で作る（例：システムのアイデア／価値観／悩み／トレーニング）。3〜6個が目安。\n"+
+"・評価・励まし・助言・提案・感想は書かない。「明日やること」も書かない。\n"+
+"・本人が書いていないことを足さない。\n\n"+
+"次の形式だけを出力してください。前置き・あとがき・説明は一切書かないこと。\n\n"+
+"###T### （その日を一言で表すタイトル。20字前後）\n"+
+"###G### 日誌\n"+
+"###O###\n"+
+"**その日がどういう日だったかを一文で。太字にする**（例：システムのアイデアを大量に出した日）\n"+
+"\n"+
+"# 見出し\n"+
+"・#12 何について書いたか（1行）\n"+
+"・#15 何について書いたか（1行）\n"+
+"\n"+
+"# 見出し\n"+
+"・#18 何について書いたか（1行）\n"+
+"###E###\n";
+
+/* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
+var BUILD='v35';
+function stream(key,mdl,prompt,mode,onDelta){
+  var url,opt;
+  if(isAnth(key)){
+    url='https://api.anthropic.com/v1/messages';
+    opt={method:'POST',
+      headers:{'content-type':'application/json','x-api-key':key,
+               'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:mdl,max_tokens:8000,stream:true,
+        messages:[{role:'user',content:prompt}]})};
+  }else{
+    /* mode 0=考え込み切る（速い） 1=普通 2=最小限。400なら順に落として自動で当てにいく */
+    var g={contents:[{parts:[{text:prompt}]}]};
+    if(mode===0) g.generationConfig={maxOutputTokens:8000,thinkingConfig:{thinkingBudget:0}};
+    else if(mode===1) g.generationConfig={maxOutputTokens:8000};
+    url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(mdl)
+        +':streamGenerateContent?alt=sse&key='+encodeURIComponent(key);
+    opt={method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(g)};
+  }
+  return fetch(url,opt).then(function(r){
+    if(!r.ok) return r.text().then(function(b){ var e=new Error(r.status+' '+b.slice(0,300)); e.code=r.status; throw e; });
+    var rd=r.body.getReader(), dec=new TextDecoder(), buf='';
+    function pump(){
+      return rd.read().then(function(res){
+        if(res.done) return;
+        buf+=dec.decode(res.value,{stream:true});
+        var lines=buf.split('\n'); buf=lines.pop();
+        for(var i=0;i<lines.length;i++){
+          var l=lines[i];
+          if(l.indexOf('data:')!==0) continue;
+          var body=l.slice(5).replace(/^ /,'');
+          if(body==='[DONE]') continue;
+          try{
+            var j=JSON.parse(body), t='';
+            if(j.type==='content_block_delta'&&j.delta&&j.delta.text) t=j.delta.text;      /* Anthropic */
+            else if(j.candidates&&j.candidates[0]&&j.candidates[0].content){                /* Google */
+              var ps=j.candidates[0].content.parts||[];
+              for(var q=0;q<ps.length;q++) if(ps[q].text&&!ps[q].thought) t+=ps[q].text;
+            }
+            if(t) onDelta(t);
+          }catch(e){}
+        }
+        return pump();
+      });
+    }
+    return pump();
+  });
+}
+
+/* ============ 実行 ============
+   AIに投げる口はここ1つ。整理も分割も連結も、渡すプロンプトが違うだけ。 */
+/* heavy=true でまとめ用の賢いモデルを使う。ふだんは安いほう */
+function ask(pr,text,label,ok,heavy){
+  var key=LS(KEY.k), mdl=mdlOf(heavy);
+  if(!text) return;
+  if(!key){ railOpen(); secOpen('sCfg'); st('先に設定でAPIキーを入れて'); return; }
+  var btn=document.getElementById('btn'), pv=document.getElementById('prev');
+  btn.disabled=true; st(label); pv.style.display='block'; pv.textContent='';
+  var t0=Date.now(), acc='';
+  function delta(t){ acc+=t; pv.textContent=acc; pv.scrollTop=pv.scrollHeight; }
+  function go(mode,rt){
+    rt=rt||0;
+    acc=''; pv.textContent='';
+    return stream(key,mdl,pr+"\n----\n"+text,mode,delta).then(function(){
+      LS(ntKey(mdl),mode);
+      /* ここで落ちたのを通信エラーと混ぜない。原因が分からなくなるから */
+      try{ ok(acc,t0); }
+      catch(err){ st('処理エラー['+BUILD+']: '+err.message); btn.disabled=false; }
+    }).catch(function(e){
+      if(!isAnth(key)&&e.code===400&&mode<2){ st('別のやり方で再送…'); return go(mode+1,rt); }
+
+      /* 向こうが混んでるだけ。待って自分で投げ直す。3回までは黙って粘る。
+         書いた文はそのまま持ってるので、押し直さなくていい */
+      if(BUSY(e.code)&&rt<WAITS.length){
+        var w=WAITS[rt];
+        st('向こうが混んでる（'+e.code+'）。'+w+'秒待って投げ直す…（'+(rt+1)+'/'+WAITS.length+'）');
+        pv.style.display='block';
+        pv.textContent='向こうが混んでる（'+e.code+'）。\n'+w+'秒待って、自分で投げ直す。'
+                      +'\n押し直さなくていい。書いた文はそのまま残ってる。';
+        return new Promise(function(r){ setTimeout(r,w*1000); }).then(function(){ return go(mode,rt+1); });
+      }
+      /* 3回粘ってもダメだった。ここまで来たら時間を置くしかない */
+      if(BUSY(e.code)){
+        st('混んでて通らない（'+e.code+'）。少し置いてからもう一回');
+        pv.style.display='block';
+        pv.textContent='混んでて通らない（'+e.code+'）。3回投げ直したがダメだった。\n\n'
+                      +'・向こうの都合。こっちに直すところは無い\n'
+                      +'・少し置いてからもう一回押す\n'
+                      +'・まとめ（賢いほう）で出てるなら、ふだんのモデルなら通ることがある\n\n'
+                      +'使ったモデル: '+mdl;
+        btn.disabled=false; return;
+      }
+
+      if(e.code===429){ st('回数制限（429）。無料枠なら日付が変わるまで待つ。有料なら投げすぎか残高切れ');
+        pv.style.display='none'; btn.disabled=false; return; }
+      var m='エラー['+BUILD+'/mode'+mode+']: '+e.message;
+      st(m); pv.style.display='block'; pv.textContent=m+"\n\n（この文をそのままコピーして貼ってくれ）";
+      btn.disabled=false;
+      if(!isAnth(key)&&(e.code===404||e.code===400)) models();
+    });
+  }
+  var m=parseInt(LS(ntKey(mdl)),10); if(isNaN(m)) m=0;
+  go(m,0);
+}
+/* 「どの投げ方が通ったか」はモデルごとに違う（思考を切れないモデルがある）。
+   1つの場所に覚えると、モデルを分けたときに片方の都合がもう片方に移ってしまう。 */
+function ntKey(mdl){ return KEY.nt+':'+mdl; }
+function endAsk(){ document.getElementById('btn').disabled=false;
+  document.getElementById('prev').style.display='none'; }
+
+function run(){
+  var text=document.getElementById('src').value.trim();
+  ask(P,text,'整理中…',function(acc,t0){ done(acc,text,t0); });
+}
+
+function done(acc,text,t0){
+  var got=parse(acc,text);
+  if(!got.length){ st('形式が読めなかった。プレビューを見て'); document.getElementById('btn').disabled=false; return; }
+  var cur=load();
+  for(var i=got.length-1;i>=0;i--) cur.unshift(got[i]);   /* 保存は新しい順のまま */
+  save(cur); draw(); tags(); colbar(); trCnt(); toBottom(); pushSoon();
+  document.getElementById('src').value=''; LS(KEY.dr,'');   /* ここで初めて下書きを捨てる */
+  document.getElementById('prev').style.display='none';
+  document.getElementById('btn').disabled=false;
+  st(got.length+'件 / '+((Date.now()-t0)/1000).toFixed(1)+'秒');
+}
+
+/* 目印のどれかが最初に出たところで切る。
+   プロンプトによって出る目印が違う（分割のときだけ ###F### が出る）ので、
+   「次に来る目印」を決め打ちにしない。決め打ちにすると、目印が無いときに
+   本文まるごとを拾ってしまう。v19のタグ崩れはこれが原因だった。 */
+function cut(s,marks){
+  s=s||'';
+  for(var i=0;i<marks.length;i++){ var p=s.indexOf(marks[i]); if(p>=0) s=s.slice(0,p); }
+  return s.trim();
+}
+/* タグを安全にする。改行を落とし、目印が混ざったら手前で切り、長すぎるものは捨てる */
+function fixTags(a){
+  if(!a) return [];
+  var out=[];
+  a.forEach(function(x){
+    x=String(x||'').split('###')[0].replace(/[\r\n]+/g,' ').trim();
+    if(!x||x.length>20) return;
+    if(out.indexOf(x)<0) out.push(x);
+  });
+  return out.slice(0,4);
+}
+function toTags(g){
+  return fixTags(String(g||'').split(/[,、\n]/).map(function(x){return x.trim();}));
+}
+
+function parse(a,text){
+  var blocks=a.split('###T###').slice(1), out=[], marks=[];
+  var today=new Date(), d=today.getFullYear()+'-'+p2(today.getMonth()+1)+'-'+p2(today.getDate());
+  blocks.forEach(function(b){
+    var t=cut(b,['###G###','###F###','###O###','###E###']);
+    var g=cut((b.split('###G###')[1]||''),['###F###','###O###','###E###']);
+    var f=cut((b.split('###F###')[1]||''),['###O###','###E###']);
+    var o=((b.split('###O###')[1]||'').split('###E###')[0]||'').trim();
+    if(!t&&!o) return;
+    out.push({id:'e'+Date.now()+Math.random().toString(36).slice(2,6),d:d,t:t,u:Date.now(),tm:now2(),
+              tag:toTags(g),org:o,raw:''});
+    marks.push(f);
+  });
+  /* 原文を話題ごとに切り分ける（モデルに原文を書き写させると遅いので、こちらで切る） */
+  var idx=marks.map(function(m,i){ if(i===0) return 0; var p=m?text.indexOf(m.slice(0,10)):-1; return p<0?-1:p; });
+  for(var i=0;i<out.length;i++){
+    var s=idx[i]<0?null:idx[i], e=null;
+    for(var j=i+1;j<idx.length;j++){ if(idx[j]>=0){e=idx[j];break;} }
+    out[i].raw = (s===null) ? '' : text.slice(s, e===null?undefined:e).trim();
+  }
+  if(out.length===1||out.every(function(x){return !x.raw;})) out[0].raw=text;
+  return out;
+}
+function p2(n){return n<10?'0'+n:''+n;}
+function st(s){document.getElementById('st').textContent=s;}
+
+/* 短い文で往復だけ試す（どのモードが通るか調べる）。
+   モデルを2つ持つようにしたので、両方まとめて試す。 */
+function test(){
+  var key=LS(KEY.k), c=document.getElementById('cst');
+  railOpen(); secOpen('sCfg');
+  if(!key){ c.textContent=' 先にキーを保存して'; return; }
+  var a=mdlOf(false), b=mdlOf(true), ms=(a===b)?[a]:[a,b], done=[];
+  function one(mdl,mode){
+    var out='';
+    c.textContent=' '+BUILD+' '+mdl+' mode'+mode+' 試し中…';
+    return stream(key,mdl,'1+1は？数字だけ答えて。',mode,function(x){out+=x;}).then(function(){
+      LS(ntKey(mdl),mode); done.push('OK '+mdl+' [mode'+mode+'] '+out.slice(0,20));
+    }).catch(function(e){
+      if(mode<2) return one(mdl,mode+1);
+      done.push('NG '+mdl+' '+e.message.slice(0,400));
+    });
+  }
+  ms.reduce(function(p,mdl){ return p.then(function(){ return one(mdl,0); }); },Promise.resolve())
+    .then(function(){ c.textContent=' ['+BUILD+'] '+done.join(' / '); });
+}
+
+/* 使えるモデル名を一覧する（Google用。モデル名が分からないときの逃げ道） */
+function models(){
+  var key=LS(KEY.k), c=document.getElementById('cst');
+  railOpen(); secOpen('sCfg');
+  if(!key){ c.textContent=' 先にキーを保存して'; return; }
+  if(isAnth(key)){ c.textContent=' Claude: claude-haiku-4-5（安い） / claude-sonnet-4-5 / claude-opus-4-1'; return; }
+  c.textContent=' 取得中…';
+  fetch('https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(key))
+    .then(function(r){return r.json();})
+    .then(function(j){
+      var ns=(j.models||[]).filter(function(m){
+        return (m.supportedGenerationMethods||[]).indexOf('generateContent')>=0;
+      }).map(function(m){return m.name.replace('models/','');});
+      c.textContent=ns.length? ' 使える: '+ns.join(' / ') : ' 一覧が空。キーを確認して';
+    })
+    .catch(function(e){ c.textContent=' 取得失敗: '+e.message; });
+}
+
+/* ============ 保存 ============
+   端末の中は IndexedDB（localStorage の 5MB 上限を回避）。
+   本体は GitHub のプライベートリポジトリ（data.json）。全端末で同じ中身になる。
+   ============================================================ */
+var MEM=[];      /* 手持ちのエントリ（新しい順） */
+var DEL=[];      /* 消したID。これが無いと他の端末から復活してくる */
+
+function load(){ return MEM; }
+function all(){ return MEM.concat(SEED); }
+function save(a){ MEM=a; persist(); }
+/* 1件だけゴミ箱に入れる（今はボタンを置いてない。消すのは必ずゴミ箱経由） */
+function del(id,ev){ if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return; e.z=1; e.u=Date.now();
+  persist(); draw(); tags(); colbar(); trCnt(); pushSoon(); }
+
+/* ---- 端末内：IndexedDB ---- */
+var IDB=null;
+function idbOpen(){ return new Promise(function(res){
+  try{ var r=indexedDB.open('log',1);
+    r.onupgradeneeded=function(){ r.result.createObjectStore('kv'); };
+    r.onsuccess=function(){ IDB=r.result; res(IDB); };
+    r.onerror=function(){ res(null); };
+  }catch(e){ res(null); } }); }
+function idbGet(k){ return new Promise(function(res){
+  if(!IDB) return res(null);
+  try{ var q=IDB.transaction('kv','readonly').objectStore('kv').get(k);
+    q.onsuccess=function(){ res(q.result===undefined?null:q.result); };
+    q.onerror=function(){ res(null); };
+  }catch(e){ res(null); } }); }
+function idbSet(k,v){ return new Promise(function(res){
+  if(!IDB) return res(false);
+  try{ var q=IDB.transaction('kv','readwrite').objectStore('kv').put(v,k);
+    q.onsuccess=function(){ res(true); }; q.onerror=function(){ res(false); };
+  }catch(e){ res(false); } }); }
+function persist(){ numAll(); idbSet('entries',MEM); idbSet('del',DEL); }
+
+/* ---- 本体：GitHub ---- */
+function ghT(){ return LS(KEY.gt)||''; }
+function ghR(){ return (LS(KEY.gr)||'').replace(/^https?:\/\/github\.com\//,'').replace(/\/+$/,''); }
+function ghOn(){ return !!(ghT()&&ghR()); }
+function syst(s){ var e=document.getElementById('sy'); if(e) e.textContent=s; }
+
+function b64e(str){ var u=new TextEncoder().encode(str), b='';
+  for(var i=0;i<u.length;i+=0x8000) b+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));
+  return btoa(b); }
+function b64d(b){ var t=atob(String(b).replace(/\s/g,'')), u=new Uint8Array(t.length);
+  for(var i=0;i<t.length;i++) u[i]=t.charCodeAt(i);
+  return new TextDecoder().decode(u); }
+
+function ghHead(){ return {'authorization':'Bearer '+ghT(),
+  'accept':'application/vnd.github+json','x-github-api-version':'2022-11-28'}; }
+function ghUrl(){ return 'https://api.github.com/repos/'+ghR()+'/contents/data.json'; }
+
+function ghGet(){
+  return fetch(ghUrl()+'?t='+Date.now(),{headers:ghHead(),cache:'no-store'}).then(function(r){
+    if(r.status===404) return {data:{entries:[],del:[]},sha:null};   /* まだファイルが無い */
+    if(!r.ok) return r.text().then(function(b){ var e=new Error(r.status+' '+b.slice(0,160)); e.code=r.status; throw e; });
+    return r.json().then(function(j){
+      var d; try{ d=JSON.parse(b64d(j.content)); }catch(e){ d={entries:[],del:[]}; }
+      if(!d||!d.entries) d={entries:[],del:[]};
+      return {data:d,sha:j.sha};
+    });
+  });
+}
+function ghPut(data,sha){
+  var b={message:'log '+new Date().toISOString(),content:b64e(JSON.stringify(data))};
+  if(sha) b.sha=sha;
+  return fetch(ghUrl(),{method:'PUT',headers:ghHead(),body:JSON.stringify(b)}).then(function(r){
+    if(!r.ok) return r.text().then(function(t){ var e=new Error(r.status+' '+t.slice(0,160)); e.code=r.status; throw e; });
+    return r.json();
+  });
+}
+
+/* 両方を混ぜる。IDが同じものは「あとで触った方」を採る。消したIDは落とす。
+   u＝そのブロックを最後にいじった時刻。これが無いと、色を付けてない端末の
+   古いコピーが、色を付けた端末のコピーを上書きして消してしまう。 */
+function mix(a,b,del){
+  var at={}, out=[], i, L=[a||[],b||[]];
+  for(var n=0;n<2;n++) for(i=0;i<L[n].length;i++){
+    var e=L[n][i]; if(!e||!e.id) continue;
+    var p=at[e.id];
+    if(p===undefined){ at[e.id]=out.length; out.push(e); continue; }
+    if((e.u||0)>(out[p].u||0)) out[p]=e;   /* あとで触った方が勝つ */
+  }
+  if(del&&del.length) out=out.filter(function(e){ return del.indexOf(e.id)<0; });
+  out.sort(function(x,y){
+    var c=String(y.d||'').localeCompare(String(x.d||''));
+    return c!==0?c:String(y.id).localeCompare(String(x.id));
+  });
+  return out;
+}
+
+/* ============ 同期の状態を見せる ============
+   ''=きれい / wait=まだ上がってない / bad=失敗した（押せば再送） */
+var SST='';
+function sst(s){
+  SST=s;
+  var b=document.getElementById('bSy'); if(!b) return;
+  b.className=s==='wait'?'wait':(s==='bad'?'bad':(s==='ok'?'okk':''));
+  b.textContent=s==='wait'?'⇅未':(s==='bad'?'⇅失敗':'⇅');
+  if(s==='ok') setTimeout(function(){ if(SST==='ok') sst(''); },2500);
+}
+/* 上げ忘れたまま閉じられないように、閉じるときに警告を出す */
+var LEAVE=false;
+window.addEventListener('beforeunload',function(ev){
+  if(LEAVE) return;
+  if(SST==='wait'||SST==='bad'){ ev.preventDefault(); ev.returnValue=''; return ''; }
+});
+
+var SY=false;
+function sync(quiet,retry){
+  if(!ghOn()){ if(!quiet){ railOpen(); secOpen('sGh'); syst('GitHubの設定がまだ'); } return Promise.resolve(); }
+  if(SY) return Promise.resolve();
+  SY=true; syst('同期中…');
+  return ghGet().then(function(g){
+    var rd=(g.data.del)||[];
+    var del=rd.concat(DEL.filter(function(x){ return rd.indexOf(x)<0; }));
+    var before=JSON.stringify({e:g.data.entries,d:rd});
+    var m=mix(MEM,g.data.entries,del);
+    MEM=m; DEL=del; persist(); draw(); tags(); colbar(); trCnt();
+    if(JSON.stringify({e:MEM,d:DEL})===before){ syst('同期OK '+MEM.length+'件'); SY=false; sst('ok'); return; }
+    return ghPut({entries:MEM,del:DEL},g.sha).then(function(){
+      syst('保存した '+MEM.length+'件'); SY=false; sst('ok');
+    });
+  }).catch(function(e){
+    SY=false;
+    if(e.code===409&&!retry) return sync(quiet,1);   /* 他の端末と衝突したら1回だけやり直す */
+    syst('同期エラー: '+e.message); sst('bad');
+    if(!quiet){ railOpen(); secOpen('sGh'); }
+  });
+}
+var SYT=null;
+function pushSoon(){ if(!ghOn()) return; sst('wait');
+  clearTimeout(SYT); SYT=setTimeout(function(){ sync(true); },1200); }
+
+/* 失敗しても勝手に諦めない。裏に回したとき／戻ってきたとき／電波が戻ったときに送り直す */
+document.addEventListener('visibilitychange',function(){
+  if(SST==='wait'||SST==='bad') sync(true);
+  else if(!document.hidden) sync(true);
+});
+window.addEventListener('online',function(){ sync(true); });
+window.addEventListener('focus',function(){ if(SST==='wait'||SST==='bad') sync(true); });
+
+function saveGh(){
+  var t=document.getElementById('ght').value.trim(), r=document.getElementById('ghr').value.trim();
+  if(t) LS(KEY.gt,t);
+  if(r) LS(KEY.gr,r);
+  document.getElementById('ght').value='';
+  document.getElementById('ght').placeholder=ghT()?'トークン保存済み':'GitHubトークン';
+  document.getElementById('ghr').value=ghR();
+  syst('保存した。同期する…');
+  sync();
+}
+
+function saveCfg(){
+  var k=document.getElementById('key').value.trim(),
+      m=document.getElementById('mdl').value.trim(),
+      m2=document.getElementById('mdl2').value.trim();
+  if(k) LS(KEY.k,k);
+  LS(KEY.m,m||defMdl());
+  LS(KEY.m2,m2||defMdl2());
+  document.getElementById('mdl').value=LS(KEY.m);
+  document.getElementById('mdl2').value=LS(KEY.m2);
+  document.getElementById('key').value='';
+  document.getElementById('key').placeholder='APIキー保存済み（変えるときだけ入力）';
+  document.getElementById('cst').textContent=' 保存した（'+(isAnth(LS(KEY.k))?'Claude':'Gemini')
+    +'）ふだん:'+LS(KEY.m)+' / まとめ:'+LS(KEY.m2);
+}
+function dump(){
+  copy(JSON.stringify(load(),null,1));
+  document.getElementById('cst').textContent=' コピーした（'+load().length+'件）';
+}
+
+/* ============ コピー ============ */
+function copy(s){
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(s); return true; } }catch(e){}
+  var ta=document.createElement('textarea'); ta.value=s;
+  ta.style.position='absolute'; ta.style.left='-9999px';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta); return true;
+}
+function cp(ev,id,f){
+  ev.stopPropagation();
+  var e=null, L=all();
+  for(var i=0;i<L.length;i++) if(L[i].id===id){ e=L[i]; break; }
+  if(!e) return;
+  var s = f==='t'? e.t : f==='org'? e.org : f==='raw'? e.raw : (e.tag||[]).join(', ');
+  copy(s);
+  var b=ev.target; var old=b.textContent; b.textContent='済'; b.className='cp ok'+(f==='g'?' cpt':'');
+  setTimeout(function(){ b.textContent=old; b.className='cp'+(f==='g'?' cpt':''); },900);
+}
+
+/* ============ 描画（古い順。いちばん下が最新） ============ */
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+/* #12 と書いてあったら、そのブロックへのリンクにする。
+   見出しの「# 」は間に空白があるので、ここには引っかからない。 */
+function lk(l){ return l.replace(/#(\d{1,6})/g,
+  function(_,n){ return '<span class="lk" onclick="jump(event,'+n+')">#'+n+'</span>'; }); }
+function ln(l){return lk(l.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/==(.+?)==/g,'<mark>$1</mark>'));}
+function md(s){ return esc(s).split('\n').map(function(l){
+  if(l.indexOf('# ')===0) return '<span class="h">'+ln(l.slice(2))+'</span>';
+  if(l.indexOf('・')===0) return '<span class="li">'+ln(l)+'</span>';
+  return ln(l)+'<br>'; }).join(''); }
+
+/* ============ 色 ============
+   色＝次に何をやるか。読んだら必ず何か付ける。だから無色＝まだ読んでない。
+   b:青 AIと壁打ちしたい / r:赤 もう一回読み返したい / g:緑 手をつけた / x:灰 要らない
+   ============================================================ */
+/* 色は「このあと何をするか」だけを持たせる。重要かどうかは日付の欄が持つ（別の軸だから）。
+   ぱっと見て無色があれば、まだ仕分けてない。全部が緑になればその範囲は片付いている。 */
+var COL=[{k:'',n:'無色',w:'まだ仕分けてない'},{k:'b',n:'青',w:'これから何かする'},
+         {k:'g',n:'緑',w:'済んだ'},{k:'x',n:'灰',w:'要らない'}];
+var activeC=null;   /* 色での絞り込み。null＝全部 */
+var activeI=false;  /* 重要だけに絞る */
+var LASTID=null;    /* PCでキー1〜5を押したときの相手 */
+
+function ent(id){ var L=all(); for(var i=0;i<L.length;i++) if(L[i].id===id) return L[i]; return null; }
+
+/* タイトルの左肩の丸をタップ＝5色を出す。もう一回タップで閉じる */
+function palOpen(ev,id){
+  ev.stopPropagation();
+  var cell=ev.currentTarget.parentNode;          /* .c-title */
+  var was=cell.classList.contains('pk');
+  palClose();
+  if(was) return;
+  LASTID=id;
+  cell.classList.add('pk');
+  var box=document.createElement('div');
+  box.className='pal';
+  box.innerHTML = COL.map(function(c,i){
+    return '<span class="sw s'+i+'" onclick="setC(event,\''+id+'\',\''+c.k+'\')">'+c.w+'</span>'; }).join('');
+  cell.appendChild(box);
+}
+/* よそを触ったら閉じる（palOpen と setC は伝播を止めてるのでここには来ない） */
+document.addEventListener('click',function(){ palClose(); });
+function palClose(){
+  var ps=document.getElementById('rows').getElementsByClassName('pk');
+  while(ps.length){ var p=ps[0]; p.classList.remove('pk');
+    var b=p.getElementsByClassName('pal')[0]; if(b) b.parentNode.removeChild(b); }
+}
+
+function setC(ev,id,c){
+  if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return;
+  e.c=c; e.u=Date.now(); persist(); pushSoon(); colbar(); palClose();
+  var row=document.querySelector('.row[data-id="'+id+'"]');
+  if(row){
+    row.className='row'+(c?' k-'+c:'')+(row.classList.contains('open')?' open':'');
+    var ch=row.getElementsByClassName('ch')[0];
+    if(ch) ch.className='ch'+(c?' ch-'+c:'');
+  }
+  if(activeC!==null) draw();   /* 色で絞ってる最中は並びが変わるので描き直す */
+}
+
+/* ============ 重要＝日付の欄を赤くする ============
+   色は「このあと何をするか」で、青が緑に上書きされていく。重要は上書きされない別の軸。
+   同じ場所に置くとぶつかるので、場所ごと分ける。日付をタップで付け外し。 */
+function setIm(ev,id){
+  if(SELMODE) return;
+  if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return;
+  if(e.im) delete e.im; else e.im=1;
+  e.u=Date.now(); persist(); pushSoon(); colbar();
+  var row=document.querySelector('.row[data-id="'+id+'"]');
+  if(row){ var c=row.getElementsByClassName('c-date')[0];
+    if(c) c.className='c-date'+(e.im?' im':''); }
+  if(activeI) draw();
+}
+function selIm(v){
+  var ids=selIds(); if(!ids.length) return;
+  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ if(v) e.im=1; else delete e.im; e.u=Date.now(); } });
+  persist(); pushSoon(); colbar(); draw();
+}
+
+/* ============ 行動タグ（タグの上の段） ============
+   このブロックについて、このあと何をするか。複数出ることがある。
+   済んだものはタップして取り消し線にする。消さない。何をした話だったかが履歴として残る。
+   全部に取り消し線が付いたら、そのブロックの色を自動で緑にする（＝片付いた）。 */
+var ACT=['AI壁打ち','下書きを進める','調べる'];
+
+function actList(){                 /* 既定の3つ＋今まで使ったもの */
+  var s=ACT.slice();
+  all().forEach(function(e){ (e.at||[]).forEach(function(x){ if(s.indexOf(x)<0) s.push(x); }); });
+  return s;
+}
+function atDone(e){                 /* 行動タグが全部消し込まれたか */
+  var a=e.at||[]; if(!a.length) return false;
+  var x=e.ax||[];
+  return a.every(function(n){ return x.indexOf(n)>=0; });
+}
+function atRedraw(id){
+  var e=ent(id), row=document.querySelector('.row[data-id="'+id+'"]');
+  if(!e||!row) return;
+  var box=row.getElementsByClassName('atg')[0];
+  if(box) box.innerHTML=atHtml(e);
+  row.className='row'+(e.c?' k-'+e.c:'')+(row.classList.contains('open')?' open':'')
+    +(row.classList.contains('sel')?' sel':'');
+  var ch=row.getElementsByClassName('ch')[0];
+  if(ch) ch.className='ch'+(e.c?' ch-'+e.c:'');
+}
+/* 行動タグをタップ＝取り消し線を付ける／外す */
+function atTog(ev,id,n){
+  if(ev) ev.stopPropagation();
+  if(SELMODE) return;
+  var e=ent(id); if(!e) return;
+  var x=(e.ax||[]).slice(), i=x.indexOf(n);
+  if(i>=0) x.splice(i,1); else x.push(n);
+  e.ax=x;
+  if(atDone(e)) e.c='g';                       /* 全部済んだら自動で緑 */
+  else if(e.c==='g') e.c='b';                  /* 消し込みを戻したら青に戻す */
+  e.u=Date.now(); persist(); pushSoon(); colbar(); atRedraw(id);
+}
+function atOpen(ev,id){
+  ev.stopPropagation();
+  var cell=ev.currentTarget.parentNode.parentNode;   /* .atg の親＝.c-title */
+  var was=cell.classList.contains('pk');
+  palClose();
+  if(was) return;
+  cell.classList.add('pk');
+  var box=document.createElement('div');
+  box.className='pal apl';
+  box.innerHTML=actList().map(function(n){
+    return '<span class="sw" onclick="atAdd(event,\''+id+'\',\''+esc(n)+'\')">'+esc(n)+'</span>'; }).join('');
+  cell.appendChild(box);
+}
+function atAdd(ev,id,n){
+  if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return;
+  var a=(e.at||[]).slice();
+  if(a.indexOf(n)>=0){ a.splice(a.indexOf(n),1);            /* もう付いてたら外す */
+    var x=(e.ax||[]).filter(function(y){ return y!==n; }); e.ax=x; }
+  else a.push(n);
+  e.at=a;
+  if(a.length&&!e.c) e.c='b';                  /* やることが付いた＝これから何かする */
+  if(atDone(e)) e.c='g';
+  e.u=Date.now(); persist(); pushSoon(); colbar(); palClose(); atRedraw(id);
+}
+function atHtml(e){
+  var a=e.at||[], x=e.ax||[];
+  return a.map(function(n){
+    return '<span class="'+(x.indexOf(n)>=0?'dn':'')+'" onclick="atTog(event,\''+e.id+'\',\''+esc(n)+'\')">'
+      +esc(n)+'</span>'; }).join('')
+    +'<span class="ad" onclick="atOpen(event,\''+e.id+'\')">＋やること</span>';
+}
+function selAct(n){
+  var ids=selIds(); if(!ids.length) return;
+  all().forEach(function(e){
+    if(ids.indexOf(e.id)<0) return;
+    var a=(e.at||[]).slice();
+    if(a.indexOf(n)<0) a.push(n);
+    e.at=a; if(!e.c) e.c='b'; e.u=Date.now();
+  });
+  persist(); pushSoon(); colbar(); draw();
+}
+
+/* ============ 星＝重要度（1〜5） ============
+   色は「次に何をやるか」。星は「どれだけ大事か」。別の軸なので混ぜない。
+   日付の下の5つの星を直接タップして付ける。同じ星をもう一回押すと消える。 */
+var activeS=null;   /* 星での絞り込み。null＝全部 / 0＝星なし / 1〜5＝その数以上 */
+
+function setS(ev,id,n){
+  if(SELMODE) return;              /* 選択モード中はタップを行の選択にゆずる */
+  if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return;
+  var v=((e.s||0)===n)?0:n;        /* 同じ星をもう一回押したら外れる */
+  if(v) e.s=v; else delete e.s;
+  e.u=Date.now(); persist(); pushSoon(); starbar();
+  var row=document.querySelector('.row[data-id="'+id+'"]');
+  if(row){
+    var box=row.getElementsByClassName('stx')[0];
+    if(box){ var xs=box.getElementsByTagName('i');
+      for(var i=0;i<xs.length;i++) xs[i].className=(i<v?'f':''); }
+  }
+  if(activeS!==null) draw();       /* 星で絞ってる最中は並びが変わるので描き直す */
+}
+
+function starbar(){
+  var box=document.getElementById('starbar'); if(!box) return;
+  var n=[0,0,0,0,0,0];
+  all().forEach(function(e){ if(!e.z&&!isSep(e)) n[Math.min(5,e.s||0)]++; });
+  var h='<button class="'+(activeS===null?'on':'')+'" onclick="pickS(null,this)">全部</button>';
+  for(var k=5;k>=1;k--){
+    var c=0; for(var j=k;j<=5;j++) c+=n[j];
+    h+='<button class="'+(activeS===k?'on':'')+'" onclick="pickS('+k+',this)">★'+k+'↑ '+c+'</button>';
+  }
+  h+='<button class="'+(activeS===0?'on':'')+'" onclick="pickS(0,this)">なし '+n[0]+'</button>';
+  box.innerHTML=h;
+}
+function pickS(k,b){ activeS=k; draw(); toBottom();
+  var bs=document.getElementById('starbar').getElementsByTagName('button');
+  for(var i=0;i<bs.length;i++) bs[i].className=''; b.className='on'; }
+
+/* ============ 複数選択と一括操作 ============
+   レールの「選」でモードに入る。行をタップ＝選ぶ／外す（開閉はしない）。
+   下の帯で、色を一括で塗る・まとめて消す。 */
+var SELMODE=false, SEL={};
+
+function selMode(){
+  SELMODE=!SELMODE;
+  if(!SELMODE) SEL={};
+  document.getElementById('bSel').className=SELMODE?'on':'';
+  document.getElementById('selbar').className='selbar'+(SELMODE?' on':'');
+  selCnt(); draw();
+}
+function selIds(){ var a=[]; for(var k in SEL) if(SEL[k]) a.push(k); return a; }
+function selCnt(){ document.getElementById('selcnt').textContent=selIds().length+' 件'; }
+
+function rowTap(ev,id,el){
+  LASTID=id;
+  if(SELMODE){
+    SEL[id]=!SEL[id];
+    el.classList.toggle('sel',!!SEL[id]);
+    var c=el.getElementsByClassName('ck')[0];
+    if(c) c.className='ck'+(SEL[id]?' on':'');
+    selCnt(); return;
+  }
+  el.classList.toggle('open');
+}
+
+function selAll(){
+  var rs=document.getElementById('rows').getElementsByClassName('row');
+  var on=selIds().length<rs.length;   /* 全部入ってなければ全部入れる。入ってれば外す */
+  SEL={};
+  if(on) for(var i=0;i<rs.length;i++) SEL[rs[i].getAttribute('data-id')]=true;
+  selCnt(); draw();
+}
+function selClear(){ SEL={}; selCnt(); draw(); }
+
+/* 選んだブロックの「整理」の欄だけを繋いでコピーする。
+   ブロックごと持っていくと日付や原文まで付いてきて崩れる。欲しいのは中身だけ。
+   繋ぐ順番は古い順。読み返す向きと同じにする。 */
+function copyOrg(b){
+  var ids=selIds(); if(!ids.length){ st('先に選んで'); return; }
+  var L=all().filter(function(e){ return ids.indexOf(e.id)>=0 && !isSep(e); });
+  L.sort(function(x,y){
+    var c=String(x.d||'').localeCompare(String(y.d||''));
+    return c!==0?c:String(x.id).localeCompare(String(y.id));
+  });
+  var s=L.map(function(e){ return e.org||''; }).filter(Boolean).join('\n\n');
+  if(!s){ st('整理の中身が無い'); return; }
+  copy(s);
+  var old=b.textContent; b.textContent='コピーした';
+  setTimeout(function(){ b.textContent=old; },900);
+  st(L.length+'件の整理をコピーした');
+}
+
+function selColor(k){
+  var ids=selIds(); if(!ids.length) return;
+  var L=all();
+  L.forEach(function(e){ if(ids.indexOf(e.id)>=0){ e.c=k; e.u=Date.now(); } });
+  persist(); pushSoon(); colbar(); draw();
+}
+function selStar(n){
+  var ids=selIds(); if(!ids.length) return;
+  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ if(n) e.s=n; else delete e.s; e.u=Date.now(); } });
+  persist(); pushSoon(); starbar(); draw();
+}
+
+/* ============ ゴミ箱 ============
+   書いたものは財産。だから消さない。要らないものは灰色にするか、ゴミ箱に入れておく。
+   本当に消えるのはゴミ箱の中で「完全に削除」を2回押したときだけ。 */
+var TRASH=false;
+
+function trashView(){
+  TRASH=!TRASH;
+  SEL={};
+  document.getElementById('bTr').className=TRASH?'on':'';
+  document.getElementById('bToTr').style.display=TRASH?'none':'';
+  document.getElementById('bSplit').style.display=TRASH?'none':'';
+  document.getElementById('bJoin').style.display=TRASH?'none':'';
+  document.getElementById('bBack').style.display=TRASH?'':'none';
+  document.getElementById('bPurge').style.display=TRASH?'':'none';
+  if(TRASH&&!SELMODE) selMode(); else { selCnt(); draw(); }
+  toBottom();
+}
+function trCnt(){ var n=0; all().forEach(function(e){ if(e.z) n++; });
+  var b=document.getElementById('bTr'); if(b) b.textContent=n?('🗑'+n):'🗑'; }
+
+function setZ(v){
+  var ids=selIds(); if(!ids.length) return;
+  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ if(v) e.z=1; else delete e.z; e.u=Date.now(); } });
+  SEL={}; persist(); pushSoon(); draw(); tags(); colbar(); trCnt(); selCnt();
+}
+function toTrash(){ setZ(1); }
+function unTrash(){ setZ(0); }
+
+/* ============ 分割と連結 ============
+   1回の入力＝1ブロックが基本。長すぎたら押して割る。切りすぎたら押して繋ぐ。
+   どちらも元のブロックはゴミ箱に残す。消さない。 */
+/* ============ 通し番号 ============
+   まとめの箇条書きから元のブロックへ飛ぶために、ブロックに番号を振る。
+   一度振った番号は二度と変えない。消しても欠番のまま空ける。
+   詰め直すと、前に書いたまとめの「#12」が別のブロックを指すようになるから。
+   並び順とは何の関係もない。ただの名札。 */
+function msOf(e){ var m=String(e.id||'').match(/^[a-z](\d{13})/); return m?+m[1]:0; }
+function numAll(){
+  var mx=0, need=[];
+  MEM.forEach(function(e){
+    if(isSep(e)) return;
+    if(e.n>mx) mx=e.n;
+    if(!e.n) need.push(e);
+  });
+  if(!need.length) return 0;
+  need.sort(function(x,y){ return (msOf(x)-msOf(y))||String(x.id).localeCompare(String(y.id)); });
+  need.forEach(function(e){ e.n=++mx; e.u=Date.now(); });
+  return need.length;
+}
+
+/* #12 を押したらそのブロックまで飛ぶ。絞り込みで隠れていたら、先に絞りを外す */
+function jump(ev,n){
+  if(ev) ev.stopPropagation();
+  var L=all(), e=null;
+  for(var i=0;i<L.length;i++) if(L[i].n===n){ e=L[i]; break; }
+  if(!e){ st('#'+n+' は見つからない'); return; }
+  if(!!e.z!==!!TRASH){ st('#'+n+' は'+(e.z?'ゴミ箱の中':'ゴミ箱の外')+'にある'); return; }
+  var row=document.querySelector('.row[data-id="'+e.id+'"]');
+  if(!row){
+    active=null; activeC=null; activeS=null;
+    draw(); tags(); colbar();
+    row=document.querySelector('.row[data-id="'+e.id+'"]');
+  }
+  if(!row){ st('#'+n+' が出せない'); return; }
+  var f=document.getElementById('feed');
+  var r=row.getBoundingClientRect(), fr=f.getBoundingClientRect();
+  f.scrollTop += (r.top-fr.top) - f.clientHeight/3;
+  row.className+=' hit';
+  setTimeout(function(){ row.className=row.className.replace(/ hit/g,''); },1800);
+}
+/* 番号を押したらコピー。別のブロックに貼れば、そこからここへリンクが張れる */
+function cpNum(ev,n){ if(ev) ev.stopPropagation(); copy('#'+n); st('#'+n+' をコピーした'); }
+
+function sortMem(){
+  MEM.sort(function(x,y){
+    var c=String(y.d||'').localeCompare(String(x.d||''));
+    return c!==0?c:String(y.id).localeCompare(String(x.id));
+  });
+}
+function trashIds(ids){
+  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ e.z=1; e.u=Date.now(); } });
+}
+
+function splitSel(){
+  var ids=selIds();
+  if(ids.length!==1){ st('分割は1つだけ選んで'); return; }
+  var e=ent(ids[0]); if(!e) return;
+  var src=e.raw||e.org||''; if(!src){ st('原文が無い'); return; }
+  ask(PSPLIT,src,'分割中…',function(acc,t0){
+    var got=parse(acc,src);
+    if(got.length<2){ st('1つのままで返ってきた。もう一回押してみて'); endAsk(); return; }
+    got.forEach(function(g){ g.d=e.d; g.c=e.c||''; g.u=Date.now(); g.tm=tmOf(e);
+      if(e.im) g.im=1;
+      if((e.at||[]).length){ g.at=e.at.slice(); g.ax=(e.ax||[]).slice(); } });
+    trashIds([e.id]);
+    for(var i=got.length-1;i>=0;i--) MEM.unshift(got[i]);
+    sortMem(); SEL={}; persist(); pushSoon();
+    draw(); tags(); colbar(); trCnt(); selCnt(); endAsk();
+    st(got.length+'個に分けた。元のブロックはゴミ箱にある');
+  });
+}
+
+function joinSel(){
+  var ids=selIds();
+  if(ids.length<2){ st('連結は2つ以上選んで'); return; }
+  var L=all().filter(function(e){ return ids.indexOf(e.id)>=0; });
+  L.sort(function(x,y){                     /* 古い順に繋ぐ */
+    var c=String(x.d||'').localeCompare(String(y.d||''));
+    return c!==0?c:String(x.id).localeCompare(String(y.id));
+  });
+  var src=L.map(function(e){ return e.raw||e.org||''; }).filter(Boolean).join('\n\n');
+  if(!src){ st('原文が無い'); return; }
+  ask(P,src,'連結中…',function(acc,t0){
+    var got=parse(acc,src);
+    if(!got.length){ st('形式が読めなかった。プレビューを見て'); endAsk(); return; }
+    var n=got[0];
+    n.d=L[0].d;                              /* 日付はいちばん古いものに合わせる */
+    n.tm=tmOf(L[0]);                         /* 時刻も、いちばん古いものに合わせる */
+    n.raw=src; n.u=Date.now();
+    n.c=(L.filter(function(e){return e.c;})[0]||{}).c||'';
+    var tg=[]; L.forEach(function(e){ (e.tag||[]).forEach(function(x){ if(tg.indexOf(x)<0) tg.push(x); }); });
+    (n.tag||[]).forEach(function(x){ if(tg.indexOf(x)<0) tg.push(x); });
+    n.tag=fixTags(tg);
+    if(L.some(function(e){ return e.im; })) n.im=1;          /* 1つでも重要なら重要のまま */
+    var at=[],ax=[];                                        /* 行動タグは落とさずに全部持っていく */
+    L.forEach(function(e){
+      (e.at||[]).forEach(function(x){ if(at.indexOf(x)<0) at.push(x); });
+      (e.ax||[]).forEach(function(x){ if(ax.indexOf(x)<0) ax.push(x); });
+    });
+    if(at.length){ n.at=at; n.ax=ax.filter(function(x){ return at.indexOf(x)>=0; }); }
+    trashIds(ids);
+    MEM.unshift(n); sortMem(); SEL={}; persist(); pushSoon();
+    draw(); tags(); colbar(); trCnt(); selCnt(); endAsk();
+    st(L.length+'個を1つにした。元のブロックはゴミ箱にある');
+  });
+}
+
+/* ここだけが本当に消える場所。2段階。1回目で「本当に消す」に変わり、5秒でもとに戻る */
+var SDT=0;
+function purge(b){
+  var ids=selIds(); if(!ids.length) return;
+  if(b.getAttribute('data-arm')!=='1'){
+    b.setAttribute('data-arm','1'); b.textContent='本当に消す（'+ids.length+'）';
+    clearTimeout(SDT);
+    SDT=setTimeout(function(){ b.removeAttribute('data-arm'); b.textContent='完全に削除'; },5000);
+    return;
+  }
+  clearTimeout(SDT); b.removeAttribute('data-arm'); b.textContent='完全に削除';
+  ids.forEach(function(id){ if(DEL.indexOf(id)<0) DEL.push(id); });
+  MEM=MEM.filter(function(x){ return ids.indexOf(x.id)<0; });
+  SEL={}; persist(); pushSoon(); draw(); tags(); colbar(); trCnt(); selCnt();
+}
+
+/* ============ 区切り線 ============
+   灰（d）＝1日の区切り。桃（b）＝しおり（自分でここに印を置きたいとき）。
+   区切り線は「どのブロックの下に来るか」を after で持つ。日付やIDで位置を決めない。
+   あとから間に何が入っても、指した相手の真下から動かないため。
+   まとめ＝1つ前の区切りからこの区切りまでを、AIに事実ベースで整理させる。
+   出来たまとめは before＝この区切りのID を持つ普通のブロックになる（タグは日誌）。
+   だから色も星もタグも普通に効くし、あとで常駐AIに読ませることもできる。 */
+function isSep(e){ return e && e.k==='sep'; }
+
+function weave(rows,seps){
+  var out=[], byAfter={}, byBefore={}, used={};
+  seps.forEach(function(s){ var a=s.after||''; (byAfter[a]=byAfter[a]||[]).push(s); });
+  rows.forEach(function(e){ if(e.before){ (byBefore[e.before]=byBefore[e.before]||[]).push(e); } });
+  function putSep(s){
+    used[s.id]=1;
+    (byBefore[s.id]||[]).forEach(function(x){ out.push(x); });   /* まとめは線の真上 */
+    out.push(s);
+  }
+  (byAfter['']||[]).forEach(putSep);                              /* いちばん上に置いた区切り */
+  rows.forEach(function(e){
+    if(e.before) return;                                          /* まとめは線のところで出す */
+    out.push(e);
+    (byAfter[e.id]||[]).forEach(putSep);
+  });
+  seps.forEach(function(s){ if(!used[s.id]) putSep(s); });        /* 指す相手を見失った線は末尾 */
+  var got={}; out.forEach(function(x){ got[x.id]=1; });
+  rows.forEach(function(e){ if(!got[e.id]) out.push(e); });        /* 線を見失ったまとめも捨てない */
+  return out;
+}
+
+/* この区切り線までの範囲（1つ前の区切りの次から、この区切りの直前まで）。まとめ自身は入れない */
+function sepRange(id){
+  var rows=document.getElementById('rows'); if(!rows) return [];
+  var kids=rows.children, buf=[], out=null;
+  for(var i=0;i<kids.length;i++){
+    var d=kids[i], eid=d.getAttribute('data-id'), e=eid?ent(eid):null;
+    if(!e) continue;
+    if(isSep(e)){ if(e.id===id){ out=buf; break; } buf=[]; continue; }
+    if(e.before) continue;                                        /* 前に作ったまとめは材料にしない */
+    buf.push(e);
+  }
+  return out||[];
+}
+
+/* 日付は「書いた瞬間の時計」でしかない。夜中の1時に書けば翌日になってしまう。
+   だから何日ぶんかを決めるのは区切り線のほうにする。
+   線に属するブロックは、線が持つ日付で表示する（データの d は原本のまま触らない）。 */
+function dPlus(s,n){
+  var p=String(s||'').split('-');
+  if(p.length!==3) return s;
+  var t=new Date(+p[0],+p[1]-1,+p[2]);
+  if(isNaN(t.getTime())) return s;
+  t.setDate(t.getDate()+n);
+  return t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate());
+}
+function today(){ var t=new Date();
+  return t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate()); }
+function now2(){ var t=new Date(); return p2(t.getHours())+':'+p2(t.getMinutes()); }
+
+/* 何時に書いたか。日付は線が決めるので、ブロック側で意味を持つのは時刻のほう。
+   古いブロックには tm が無いが、IDの中に作った瞬間のミリ秒が埋まっているのでそこから出す。 */
+function tmOf(e){
+  if(e.tm) return e.tm;
+  var m=String(e.id||'').match(/^[a-z](\d{13})/);
+  if(!m) return '';
+  var t=new Date(+m[1]);
+  if(isNaN(t.getTime())) return '';
+  return p2(t.getHours())+':'+p2(t.getMinutes());
+}
+
+/* 区切り線は「そこからこの日が始まる」という意味にする。
+   線に 8/2 と書いてあれば、その線から下が 8/2。線より上は前の日。
+   だから線のボタンは「前日のまとめ」。線の上を締めるという意味になる。
+
+   ブロックID → 表示する日付。自分より上にある最初の「1日の区切り」の日付を使う。
+   線より上（まだ1本も線が無い範囲）は、ブロックが持ってる日付をそのまま出す。 */
+var DAYS={};
+function dayMap(list){
+  var m={}, cur=null;
+  for(var i=0;i<list.length;i++){
+    var e=list[i];
+    if(isSep(e)){ if(e.sp!=='b'&&e.d) cur=e.d; continue; }
+    if(cur) m[e.id]=cur;
+  }
+  return m;
+}
+
+function sepHtml(e){
+  var pink=e.sp==='b';
+  var lbl=pink
+    ? '<b>しおり</b>'
+    : '<b><input type="date" class="dt" value="'+esc(e.d||'')+'" onclick="event.stopPropagation()"'
+      +' onchange="setSepD(event,\''+e.id+'\')"></b>';
+  var btn = TRASH
+    ? '<button onclick="unSep(event,\''+e.id+'\')">戻す</button>'
+    : (pink?'':'<button onclick="sumSep(event,\''+e.id+'\')">前日のまとめ</button>')
+      +'<button onclick="delSep(event,\''+e.id+'\')">消</button>';
+  return '<div class="sep'+(pink?' sep-b':'')+'" data-id="'+e.id+'">'
+    +'<span class="ln"></span>'+lbl+btn+'<span class="ln"></span></div>';
+}
+function setSepD(ev,id){
+  if(ev) ev.stopPropagation();
+  var v=ev.target.value; if(!v) return;
+  var e=ent(id); if(!e) return;
+  e.d=v; e.u=Date.now(); persist(); pushSoon(); draw();
+  st('区切りの日付を '+v+' にした');
+}
+
+/* 足す。選択モードで1つだけ選んでいればその下に。ふだんはいちばん下（＝最新の下）に置く。
+   線は「そこからこの日が始まる」なので、入れる日付は“これから始まる日”。
+   1つ前の1日区切りがあればその次の日。無ければ今日。違ったら線の日付を直せばいい。 */
+function addSep(kind){
+  var rows=document.getElementById('rows').children;
+  var ids=selIds(), target=ids.length===1?ids[0]:null;
+  var prev=null, lastB=null;
+  for(var i=0;i<rows.length;i++){
+    var eid=rows[i].getAttribute('data-id'), e=eid?ent(eid):null;
+    if(!e) continue;
+    if(isSep(e)){ if(e.sp!=='b') prev=e; }
+    else lastB=e;
+    if(target&&e.id===target) break;
+  }
+  var after=target||(lastB?lastB.id:'');
+  var d = prev&&prev.d ? dPlus(prev.d,1) : today();
+  MEM.unshift({id:'s'+Date.now()+Math.random().toString(36).slice(2,6),
+               k:'sep',sp:kind,d:d,after:after,t:'',u:Date.now()});
+  SEL={}; persist(); pushSoon(); draw(); selCnt();
+  st(kind==='b'?'しおりを置いた':('区切りを置いた（'+d+'）。違ったら日付を押して直して'));
+}
+function delSep(ev,id){ if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return; e.z=1; e.u=Date.now();
+  persist(); pushSoon(); draw(); trCnt(); }
+function unSep(ev,id){ if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return; delete e.z; e.u=Date.now();
+  persist(); pushSoon(); draw(); trCnt(); }
+
+function sumSep(ev,id){
+  if(ev) ev.stopPropagation();
+  var L=sepRange(id);
+  if(!L.length){ st('この区切りまでに中身が無い'); return; }
+  /* 材料は整理本文のほうを使う。原文を全部足すと長くなりすぎて弾かれる */
+  var src=L.map(function(e){
+    var g=(e.tag||[]).join('・');
+    return '#'+(e.n||'?')+' 【'+(e.t||'')+'】'+(g?'（'+g+'）':'')+'\n'+(e.org||e.raw||'');
+  }).join('\n\n----\n\n');
+  ask(PDAY,src,L.length+'件をまとめ中…',function(acc,t0){
+    var got=parse(acc,src);
+    if(!got.length){ st('形式が読めなかった。プレビューを見て'); endAsk(); return; }
+    var n=got[0];
+    /* まとめは線の上（＝前の日）のもの。だから日付は線の日付ではなく、
+       線の1つ上のブロックが属している日にする。 */
+    var last=L[L.length-1];
+    n.d=DAYS[last.id]||last.d; n.tm=tmOf(last);
+    n.raw=''; n.before=id; n.u=Date.now();
+    if(n.tag.indexOf('日誌')<0) n.tag.unshift('日誌');
+    n.tag=fixTags(n.tag);
+    /* 前に作ったまとめが残っていればゴミ箱へ（消さない。上書きもしない） */
+    all().forEach(function(x){ if(x.before===id&&!x.z){ x.z=1; x.u=Date.now(); } });
+    MEM.unshift(n); sortMem(); persist(); pushSoon();
+    draw(); tags(); colbar(); trCnt(); endAsk();
+    st(L.length+'件をまとめた / '+((Date.now()-t0)/1000).toFixed(1)+'秒');
+  },true);   /* まとめは頭を使うところなので賢いほうのモデルで投げる */
+}
+
+var active=null;
+function draw(){
+  var L=all();
+  L=L.filter(function(e){ return TRASH ? !!e.z : !e.z; });   /* z=1 はゴミ箱の中 */
+  /* 絞り込みが効いてる最中は区切り線を出さない。範囲の意味が壊れるから */
+  var seps=(active===null&&activeC===null&&activeS===null&&!activeI)?L.filter(isSep):[];
+  L=L.filter(function(e){ return !isSep(e); });
+  var list=active?L.filter(function(e){return (e.tag||[]).indexOf(active)>=0;}):L;
+  if(activeC!==null) list=list.filter(function(e){ return (e.c||'')===activeC; });
+  if(activeI) list=list.filter(function(e){ return !!e.im; });
+  if(activeS!==null) list=list.filter(function(e){ var s=e.s||0;
+    return activeS===0 ? s===0 : s>=activeS; });
+  list=list.slice().reverse();   /* 古い順にして、いちばん下を最新にする */
+  list=weave(list,seps);         /* 区切り線を、それぞれが指すブロックの下に差し込む */
+  DAYS=dayMap(list); var DM=DAYS;  /* 線に属するブロックは、線が決めた日付で見せる */
+  document.getElementById('rows').innerHTML = list.map(function(e){
+    if(isSep(e)) return sepHtml(e);
+    var tg=(e.tag||[]).map(function(x){return '<span>'+esc(x)+'</span>';}).join('');
+    var c=e.c||'';
+    var B=function(f){ return '<button class="cp'+(f==='g'?' cpt':'')+'" onclick="cp(event,\''+e.id+'\',\''+f+'\')">⧉</button>'; };
+    var sl=SELMODE&&SEL[e.id];
+    var ck=SELMODE?'<span class="ck'+(sl?' on':'')+'"></span>':'';
+    var sv=e.s||0;
+    var stx='<span class="stx">'+[1,2,3,4,5].map(function(k){
+      return '<i class="'+(k<=sv?'f':'')+'" onclick="setS(event,\''+e.id+'\','+k+')">★</i>'; }).join('')+'</span>';
+    return '<div class="row'+(c?' k-'+c:'')+(sl?' sel':'')+'" data-id="'+e.id+'" onclick="rowTap(event,\''+e.id+'\',this)">'
+      +'<div class="c-date'+(e.im?' im':'')+'">'
+        +'<span class="dtx" onclick="setIm(event,\''+e.id+'\')">'+esc(DM[e.id]||e.d)+'</span>'
+        +'<span class="tmx">'+esc(tmOf(e))+'</span>'+stx
+        +(e.n?'<span class="nox" onclick="cpNum(event,'+e.n+')">#'+e.n+'</span>':'')+'</div>'
+      +'<div class="c-title">'+ck+B('t')
+        +'<span class="ch'+(c?' ch-'+c:'')+'" onclick="palOpen(event,\''+e.id+'\')"></span>'+esc(e.t)
+        +'<div class="atg">'+atHtml(e)+'</div>'
+        +'<div class="tags">'+tg+B('g')+'</div></div>'
+      +'<div class="c-org">'+B('org')+md(e.org)+'</div>'
+      +'<div class="c-raw">'+B('raw')+md(e.raw)+'</div></div>';
+  }).join('') || '<div class="empty">まだ何もない</div>';
+  document.getElementById('cnt').textContent=list.filter(function(e){return !isSep(e);}).length+' 件';
+}
+function tags(){
+  var s=[]; all().forEach(function(e){(e.tag||[]).forEach(function(x){if(s.indexOf(x)<0)s.push(x);});});
+  document.getElementById('tagbar').innerHTML='<button class="on" onclick="pick(null,this)">全部</button>'
+    +s.map(function(x){return '<button onclick="pick(\''+x+'\',this)">'+esc(x)+'</button>';}).join('');
+}
+function pick(x,b){ active=x; draw(); toBottom();
+  var bs=document.getElementById('tagbar').getElementsByTagName('button');
+  for(var i=0;i<bs.length;i++) bs[i].className=''; b.className='on'; }
+
+/* 色で絞る */
+function colbar(){
+  var L=all(), n={}, im=0;
+  L.forEach(function(e){ if(isSep(e)) return; var k=e.c||''; n[k]=(n[k]||0)+1; if(e.im) im++; });
+  var h='<button class="'+(activeC===null&&!activeI?'on':'')+'" onclick="pickC(null,this)">全部</button>';
+  h+=COL.map(function(c){
+    return '<button class="'+(!activeI&&activeC===c.k?'on':'')+'" onclick="pickC(\''+c.k+'\',this)">'
+      +c.n+' '+(n[c.k]||0)+'</button>'; }).join('');
+  h+='<button class="'+(activeI?'on':'')+'" onclick="pickI(this)">重要 '+im+'</button>';
+  document.getElementById('colbar').innerHTML=h;
+  starbar();   /* 星の帯も一緒に更新する。呼ぶ場所を増やさないため */
+}
+function colOn(b){
+  var bs=document.getElementById('colbar').getElementsByTagName('button');
+  for(var i=0;i<bs.length;i++) bs[i].className=''; b.className='on';
+}
+function pickC(k,b){ activeC=k; activeI=false; draw(); toBottom(); colOn(b); }
+function pickI(b){ activeI=!activeI; activeC=null; draw(); toBottom();
+  if(activeI) colOn(b); else colbar(); }
+
+/* PCのおまけ：最後に触った行に 1〜5 で色を付ける */
+document.addEventListener('keydown',function(ev){
+  if(!LASTID) return;
+  var t=ev.target, tn=t&&t.tagName;
+  if(tn==='TEXTAREA'||tn==='INPUT') return;
+  if(ev.key==='5'){ ev.preventDefault(); setIm(null,LASTID); return; }   /* 5＝重要の付け外し */
+  var i='1234'.indexOf(ev.key);
+  if(i<0) return;
+  ev.preventDefault(); setC(null,LASTID,COL[i].k);
+});
+function toBottom(){ var f=document.getElementById('feed'); f.scrollTop=f.scrollHeight; }
+
+/* ============ ズーム ============ */
+var fs=16, ZMIN=2, ZMAX=40;
+function apply(nosave){ document.getElementById('zoom').style.fontSize=fs+'px';
+                  document.getElementById('zhead').style.fontSize=fs+'px';
+                  if(!nosave) LS(KEY.f,fs); }
+function Zc(v){ return Math.max(ZMIN,Math.min(ZMAX,v)); }
+function Z(d){ zoomAt(fs+(d>0?(fs<12?1:2):(fs<=12?-1:-2))); }
+function Zfit(){ var f=document.getElementById('feed');
+  var w=(f&&f.clientWidth)||window.innerWidth;
+  fs=Zc((w-4)/64.4); apply();     /* 62em＋左右の余白1.2em×2 */
+  f.scrollLeft=0; }
+
+/* 「整」＝日付＋タイトル＋整理（5+12+24＝41em）が画面いっぱいになる大きさにする。
+   原文は右にはみ出して見えなくなるが、それでいい。読み返すときに見たいのはこの3つだから。
+   はみ出した分は横スクロールで見にいける。 */
+function Zorg(){ var f=document.getElementById('feed');
+  var w=(f&&f.clientWidth)||window.innerWidth;
+  fs=Zc((w-4)/43.4); apply();     /* 41em＋左の余白1.2em＋すこし */
+  f.scrollLeft=0; }
+
+/* ---- ピンチで表そのものを拡大縮小する（指の位置を起点にする） ---- */
+function pd(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY;
+  return Math.sqrt(dx*dx+dy*dy); }
+function pm(t){ return {x:(t[0].clientX+t[1].clientX)/2, y:(t[0].clientY+t[1].clientY)/2}; }
+
+/* 刻みを粗くして、描き直す回数そのものを減らす（ガクつきの元は描き直しすぎ） */
+function qz(v){ var s=v<6?0.25:0.5; return Math.round(v/s)*s; }
+
+/* 指（またはカーソル）の下にある一点が動かないように、スクロール位置も一緒にずらす */
+function zoomNow(nf,cx,cy,nosave){
+  var f=document.getElementById('feed'), r=f.getBoundingClientRect();
+  var px=(cx==null? r.width/2 : cx-r.left), py=(cy==null? r.height/2 : cy-r.top);
+  nf=Zc(nf); var k=nf/fs;
+  var sx=(f.scrollLeft+px)*k-px, sy=(f.scrollTop+py)*k-py;
+  fs=nf; apply(nosave);
+  f.scrollLeft=Math.max(0,sx); f.scrollTop=Math.max(0,sy);
+}
+/* 指は1秒に何十回も動く。描き直しは画面の更新1回につき1回だけにする */
+var PEND=null, PRAF=0;
+function zoomAt(nf,cx,cy,nosave){
+  nf=Zc(qz(nf));
+  if(Math.abs(nf-fs)<0.01&&!PEND) return;
+  PEND={f:nf,x:cx,y:cy,n:nosave};
+  if(PRAF) return;
+  PRAF=requestAnimationFrame(function(){
+    PRAF=0; var p=PEND; PEND=null;
+    if(p&&Math.abs(p.f-fs)>=0.01) zoomNow(p.f,p.x,p.y,p.n);
+  });
+}
+
+var PZ=null;
+var IOSG=('ongesturestart' in window);   /* iOSは gesture だけ使う。両方拾うと喧嘩してガクガクする */
+(function(){
+  var f=document.getElementById('feed');
+  function inFeed(t){ while(t){ if(t===f) return true; t=t.parentNode; } return false; }
+
+  /* document で捕まえる（Androidで子要素に取られるのを防ぐ） */
+  document.addEventListener('touchstart',function(ev){
+    if(IOSG) return;
+    if(ev.touches.length===2&&inFeed(ev.target)){
+      var m=pm(ev.touches);
+      PZ={d:pd(ev.touches)||1,f:fs,x:m.x,y:m.y};
+    }
+  },{passive:false,capture:true});
+
+  document.addEventListener('touchmove',function(ev){
+    if(IOSG) return;
+    if(PZ&&PZ.d&&ev.touches.length===2){
+      ev.preventDefault();
+      var m=pm(ev.touches);
+      zoomAt(PZ.f*(pd(ev.touches)/PZ.d),m.x,m.y,true);
+    }
+  },{passive:false,capture:true});
+
+  function end(ev){ if(IOSG) return;
+    if(PZ&&(!ev.touches||ev.touches.length<2)){ PZ=null; LS(KEY.f,fs); } }
+  document.addEventListener('touchend',end,true);
+  document.addEventListener('touchcancel',end,true);
+
+  /* iOS Safari はピンチを gesture イベントで投げてくる */
+  f.addEventListener('gesturestart',function(ev){ ev.preventDefault();
+    PZ={f:fs,x:ev.clientX,y:ev.clientY}; });
+  f.addEventListener('gesturechange',function(ev){ ev.preventDefault();
+    if(PZ) zoomAt(PZ.f*(ev.scale||1),
+                  (ev.clientX!=null?ev.clientX:PZ.x),(ev.clientY!=null?ev.clientY:PZ.y),true); });
+  f.addEventListener('gestureend',function(ev){ ev.preventDefault(); PZ=null; LS(KEY.f,fs); });
+
+  /* PC：Ctrl+ホイール、トラックパッドのピンチ、どちらもカーソル位置を起点にする。
+
+     前は1回ごとに固定で10%動かしていた。トラックパッドは指を少し開くだけで
+     何十回もイベントが来るので、それだと一気に飛んで狙った大きさで止まらない。
+     だから動く量を「どれだけ指を開いたか（deltaY）」に比例させる。
+     マウスのホイールは1ノッチが100前後で来るので、頭を40で抑える。
+
+     ZW は刻みを丸める前の連続した値。丸めた fs を毎回の起点にすると、
+     動く量が刻みより小さいときに毎回同じ値へ戻って、いつまでも動かなくなる。 */
+  var ZW=0, ZWT=0;
+  f.addEventListener('wheel',function(ev){
+    if(!ev.ctrlKey&&!ev.metaKey) return;
+    ev.preventDefault();
+    var now=Date.now();
+    if(now-ZWT>400) ZW=fs;          /* 間が空いたら今の大きさから取り直す */
+    ZWT=now;
+    var dy=ev.deltaY;
+    if(ev.deltaMode===1) dy*=16; else if(ev.deltaMode===2) dy*=100;
+    dy=Math.max(-40,Math.min(40,dy));
+    ZW=Zc(ZW*Math.exp(-dy*0.006));
+    zoomAt(ZW,ev.clientX,ev.clientY);
+  },{passive:false});
+})();
+
+function Clamp(){ var r=document.getElementById('rows'),b=document.getElementById('bClamp');
+  if(r.classList.contains('clamp')){r.classList.remove('clamp');b.textContent='開';b.className='on';}
+  else{r.classList.add('clamp');b.textContent='畳';b.className='';} }
+
+/* ============ 左パネルの各段の開け閉め ============
+   タグ・色・星・設定・GitHub を、それぞれ畳めるようにする。
+   これから乗せるものが増えていくので、最初から畳める形にしておく。
+   開いてるか閉じてるかは端末に覚えさせる（同期はしない。端末ごとの見た目の話だから）。 */
+var SECS=['sTag','sCol','sStar','sCfg','sGh'];
+var SECDEF='sTag,sCol,sStar';        /* 何も覚えてないときに開いておく段 */
+function secOn(){ var v=LS(KEY.sec); return (v===null||v===undefined?SECDEF:v).split(','); }
+function secDraw(){
+  var on=secOn();
+  SECS.forEach(function(id){
+    var d=document.getElementById(id), m=document.getElementById('m_'+id);
+    if(!d) return;
+    var o=on.indexOf(id)>=0;
+    d.className='sec'+(o?' on':'');
+    if(m) m.textContent=o?'−':'＋';
+  });
+}
+/* 畳んであっても、そこを見せたいときは開ける（エラーで設定を出すときなど） */
+function secOpen(id){ var on=secOn(); if(on.indexOf(id)<0){ on.push(id); LS(KEY.sec,on.join(',')); } secDraw(); }
+function secT(id){
+  var on=secOn(), i=on.indexOf(id);
+  if(i>=0) on.splice(i,1); else on.push(id);
+  LS(KEY.sec,on.join(','));
+  secDraw();
+}
+
+/* ============ 左レールの開閉 ============ */
+function railT(){ var r=document.getElementById('rail');
+  r.classList.toggle('open');
+  document.getElementById('rt').textContent = r.classList.contains('open')?'✕':'☰'; }
+function railOpen(){ var r=document.getElementById('rail');
+  if(FULL) Full();
+  if(!r.classList.contains('open')) railT(); }
+
+/* ============ フル画面 ============
+   レールを18pxの帯にして本体を目一杯に。帯そのものが「解除」ボタン。 */
+var FULL=false;
+function Full(){
+  FULL=!FULL;
+  var r=document.getElementById('rail');
+  if(FULL&&r.classList.contains('open')) railT();
+  document.body.className=FULL?'full':'';
+  document.getElementById('bFull').textContent=FULL?'解除':'⛶';
+  try{
+    var d=document.documentElement;
+    if(FULL){ if(d.requestFullscreen) d.requestFullscreen(); }
+    else{ if(document.exitFullscreen&&document.fullscreenElement) document.exitFullscreen(); }
+  }catch(e){}
+}
+
+/* iPhoneのホーム画面から開くとURL欄も更新ボタンも無いので、自前で置く。
+   ついでにキャッシュを外して読み直す */
+function reload(){ LEAVE=true; location.replace(location.pathname+'?t='+Date.now()); }
+
+/* ============ 起動 ============ */
+/* 閉じられた世代（gemini-1.x / 2.x）が入っていたら、今の名前に寄せる。
+   そのままだと404で全部止まるので、黙って直したほうがいい。 */
+if(DEAD.test(LS(KEY.m)||'')) LS(KEY.m,defMdl());
+if(DEAD.test(LS(KEY.m2)||'')) LS(KEY.m2,defMdl2());
+document.getElementById('mdl').value=LS(KEY.m)||defMdl();
+document.getElementById('mdl2').value=LS(KEY.m2)||defMdl2();
+if(LS(KEY.k)) document.getElementById('key').placeholder='APIキー保存済み（変えるときだけ入力）';
+document.getElementById('ghr').value=ghR();
+if(ghT()) document.getElementById('ght').placeholder='トークン保存済み（変えるときだけ入力）';
+secDraw();
+tags(); colbar(); trCnt(); draw();
+document.getElementById('ver').textContent=BUILD;
+var sv=LS(KEY.f); if(sv){ fs=parseFloat(sv); apply(); } else Zfit();
+toBottom();
+
+/* v19で壊れたタグ（###O###や整理本文まるごとがタグに入ったもの）の掃除。
+   起動のたびに走らせても、まともなタグには何も起きない。 */
+function scrubTags(){
+  var n=0;
+  MEM.forEach(function(e){
+    var a=e.tag||[]; var b=fixTags(a);
+    if(a.length!==b.length||a.join('')!==b.join('')){ e.tag=b; e.u=Date.now(); n++; }
+  });
+  if(n){ pushSoon(); st('壊れたタグを'+n+'件なおした'); }
+}
+
+/* v35で色の意味を分けた。赤＝読み返したい だったものは「重要」に引っ越す（日付の欄の赤）。
+   ブロックの色は「このあと何をするか」だけにする。付け直しは要らない。1回走れば済む。 */
+function mvRed(){
+  var n=0;
+  MEM.forEach(function(e){
+    if(e.c==='r'){ e.im=1; e.c=''; e.u=Date.now(); n++; }
+  });
+  if(n){ pushSoon(); st('赤の'+n+'件を「重要」に移した'); }
+}
+
+idbOpen().then(function(){ return idbGet('entries'); }).then(function(v){
+  if(v&&v.length){ MEM=v; }
+  else{ try{ MEM=JSON.parse(LS(KEY.e)||'[]'); }catch(e){ MEM=[]; } }   /* 前のlocalStorageから引っ越し */
+  return idbGet('del');
+}).then(function(d){
+  DEL=d||[];
+  scrubTags(); mvRed();
+  persist(); tags(); colbar(); trCnt(); draw(); toBottom();
+  if(ghOn()) sync(true); else syst('GitHub未設定（この端末にだけ保存中）');
+});
+document.getElementById('src').addEventListener('keydown',function(ev){
+  if((ev.metaKey||ev.ctrlKey)&&ev.key==='Enter') run();
+});
+
+/* ============ 下書きの自動保存 ============
+   喋った直後にアプリが落ちても消えないように、打った端から端末に置いておく。
+   捨てるのは整理が成功したときだけ。 */
+(function(){
+  var s=document.getElementById('src');
+  var d=LS(KEY.dr);
+  if(d&&!s.value){ s.value=d; st('前回の下書きを戻した'); }
+  var t=null;
+  s.addEventListener('input',function(){
+    clearTimeout(t); t=setTimeout(function(){ LS(KEY.dr,s.value); },300);
+  });
+  /* 閉じる・裏に回る瞬間は待たずに即置く */
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) LS(KEY.dr,s.value); });
+  window.addEventListener('pagehide',function(){ LS(KEY.dr,s.value); });
+})();
+</script>
+</body>
+</html>
