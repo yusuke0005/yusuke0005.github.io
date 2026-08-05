@@ -94,25 +94,27 @@
   .c-org .h{display:block;font-weight:700;margin:.5em 0 .1em;color:#3a382c}
   .c-org .li{display:block;padding-left:1em;text-indent:-1em}
 
-  /* ---- 色＝次に何をやるか。ブロック全体を薄く染める。無色＝まだ読んでない ---- */
-  .row.k-b,.row.k-b:nth-child(even){background:#e4edfb}   /* 青＝AIと壁打ち */
-  .row.k-r,.row.k-r:nth-child(even){background:#fbe6e3}   /* 赤＝読み返したい */
-  .row.k-g,.row.k-g:nth-child(even){background:#e6f2e9}   /* 緑＝手をつけた */
+  /* ---- 色＝このあと何をするか。ブロック全体を薄く染める。無色＝まだ仕分けてない ---- */
+  .row.k-b,.row.k-b:nth-child(even){background:#e4edfb}   /* 青＝これから何かする */
+  .row.k-g,.row.k-g:nth-child(even){background:#e6f2e9}   /* 緑＝済んだ */
   .row.k-x,.row.k-x:nth-child(even){background:#efede5;color:#a8a696}  /* 灰＝要らない */
   .row.k-x .c-org,.row.k-x .c-raw,.row.k-x .c-title{opacity:.55}
   .row.open{box-shadow:inset .18em 0 0 #c8a03c}
+  /* ---- 重要＝日付の欄だけ赤くする。ブロックの色（このあと何をするか）とぶつからないように場所を分ける ---- */
+  .c-date.im{background:#fbe6e3;border-radius:.2em}
+  .dtx{cursor:pointer}
   /* 色を選ぶ丸ボタン（タイトルの左肩） */
   .ch{display:inline-block;width:.9em;height:.9em;border-radius:50%;margin:0 .35em 0 0;
       vertical-align:-.05em;background:#fff;box-shadow:inset 0 0 0 1px #b9b6a5;cursor:pointer}
-  .ch.ch-b{background:#3b7dd8;box-shadow:none} .ch.ch-r{background:#d0342c;box-shadow:none}
+  .ch.ch-b{background:#3b7dd8;box-shadow:none}
   .ch.ch-g{background:#4a9d5f;box-shadow:none} .ch.ch-x{background:#b9b6a5;box-shadow:none}
   .c-title.pk{overflow:visible;position:relative;z-index:6}
-  .pal{position:absolute;left:.2em;top:1.6em;width:8em;background:#fff;border:1px solid #b9b6a5;
+  .pal{position:absolute;left:.2em;top:1.6em;width:10.5em;background:#fff;border:1px solid #b9b6a5;
        border-radius:.2em;overflow:hidden}
   .pal .sw{display:block;height:2em;line-height:2em;font-size:.7em;font-weight:600;
            padding-left:.6em;white-space:nowrap;color:#fff}
   .pal .sw.s0{background:#fff;color:#8a8775} .pal .sw.s1{background:#3b7dd8}
-  .pal .sw.s2{background:#d0342c} .pal .sw.s3{background:#4a9d5f} .pal .sw.s4{background:#b9b6a5}
+  .pal .sw.s2{background:#4a9d5f} .pal .sw.s3{background:#b9b6a5}
   /* ---- 星＝重要度。色（次に何をやるか）とは別の軸。日付の下に置く ---- */
   /* 5つ確実に入るように、星1つぶんの幅を決め打ちする。
      ★ の実際の字幅はフォント任せなので、幅を指定しないと端末によって5つ目がはみ出て消える。 */
@@ -125,6 +127,16 @@
   .stx i{display:inline-block;width:1.02em;font-style:normal;font-size:.88em;line-height:1;
          text-align:center;color:#e2dfd0;cursor:pointer}
   .stx i.f{color:#c8a03c}
+  /* ---- タグは2段。上＝行動（このブロックで何をするか）。下＝分野（何の話か） ----
+     行動タグは消さない。済んだら取り消し線にする。消すと「何をした話だったか」が消えるから。
+     分野タグは色を変えても残る履歴。だから見た目は地味でいい。 */
+  .atg{margin-top:.4em}
+  .atg span{display:inline-block;font-size:.85em;background:#dbe6f7;color:#2f5d9e;
+            border:1px solid #b9cbe6;border-radius:2px;padding:0 .35em;margin:0 .25em .2em 0;cursor:pointer}
+  .atg span.dn{background:#efede5;color:#a8a696;border-color:#ddd9c9;text-decoration:line-through}
+  .atg .ad{background:#f0eee4;color:#7d7b6a;border-color:#ddd9c9;font-weight:600}
+  .pal.apl{width:9em;top:3.4em}
+  .pal.apl .sw{background:#fff;color:#2f5d9e;height:1.9em;line-height:1.9em}
   .tags{margin-top:.4em}
   .tags span{display:inline-block;font-size:.85em;background:#eceadd;color:#6b6957;
              border-radius:2px;padding:0 .35em;margin:0 .25em .2em 0}
@@ -269,10 +281,14 @@
     <div class="selbar" id="selbar">
       <b id="selcnt">0 件</b>
       <button class="b" onclick="selColor('b')">青</button>
-      <button class="r" onclick="selColor('r')">赤</button>
       <button class="g" onclick="selColor('g')">緑</button>
       <button class="x" onclick="selColor('x')">灰</button>
       <button class="n" onclick="selColor('')">無色</button>
+      <button class="r" onclick="selIm(1)">重要</button>
+      <button class="n" onclick="selIm(0)">重要↓</button>
+      <button onclick="selAct('AI壁打ち')">＋AI壁打ち</button>
+      <button onclick="selAct('下書きを進める')">＋下書き</button>
+      <button onclick="selAct('調べる')">＋調べる</button>
       <button onclick="selAll()">全選択</button>
       <button onclick="selClear()">解除</button>
       <button class="s" onclick="selStar(1)">★1</button>
@@ -361,8 +377,11 @@ FMT;
 
 /* 分割用。押したときだけ話題ごとに割る。###F### は原文を切り分ける目印 */
 var PSPLIT =
-"以下は本人が1つのブロックにまとめて書いたテキストです。話題の切り替わりで区切ってください。\n"+
-"はっきり別の話に切り替わっている箇所だけで割ること。無理に割らない。割れないなら1つのままでよい。\n"+
+"以下は本人が1つのブロックにまとめて書いたテキストです。話題ごとに区切ってください。\n"+
+"本人はこれを分けたくてボタンを押しています。だから必ず2つ以上に分けること。「分けられない」は答えになりません。\n"+
+"話が1本に見えても、必ずどこかに切れ目があります。話題・時間・対象・目的、どれかが変わったところで割る。\n"+
+"はっきりした切り替わりが見つからないときは、内容のまとまりで区切ってよい。長い1本なら段落のまとまりで割る。\n"+
+"分けすぎを恐れないこと。細かすぎたら本人があとで連結し直せます。\n"+
 "話題ごとに、次の形式だけを出力してください。前置き・あとがき・説明は一切書かないこと。\n\n"+
 "###T### （その話題を表す具体的なタイトル。20字前後）\n"+
 "###G### （タグ。次から1〜2個をカンマ区切り: アイデア,仕事・キャリア,価値観・生き方,悩み・モヤモヤ,学び,プロジェクト,トレーニング,アスリート,FX,システム,生活）\n"+
@@ -403,7 +422,7 @@ var PDAY =
 "###E###\n";
 
 /* ============ AI呼び出し（キーの形で自動判別。Anthropic / Google 両対応） ============ */
-var BUILD='v34';
+var BUILD='v35';
 function stream(key,mdl,prompt,mode,onDelta){
   var url,opt;
   if(isAnth(key)){
@@ -828,9 +847,12 @@ function md(s){ return esc(s).split('\n').map(function(l){
    色＝次に何をやるか。読んだら必ず何か付ける。だから無色＝まだ読んでない。
    b:青 AIと壁打ちしたい / r:赤 もう一回読み返したい / g:緑 手をつけた / x:灰 要らない
    ============================================================ */
-var COL=[{k:'',n:'無色',w:'まだ読んでない'},{k:'b',n:'青',w:'AIと壁打ち'},
-         {k:'r',n:'赤',w:'読み返したい'},{k:'g',n:'緑',w:'手をつけた'},{k:'x',n:'灰',w:'要らない'}];
+/* 色は「このあと何をするか」だけを持たせる。重要かどうかは日付の欄が持つ（別の軸だから）。
+   ぱっと見て無色があれば、まだ仕分けてない。全部が緑になればその範囲は片付いている。 */
+var COL=[{k:'',n:'無色',w:'まだ仕分けてない'},{k:'b',n:'青',w:'これから何かする'},
+         {k:'g',n:'緑',w:'済んだ'},{k:'x',n:'灰',w:'要らない'}];
 var activeC=null;   /* 色での絞り込み。null＝全部 */
+var activeI=false;  /* 重要だけに絞る */
 var LASTID=null;    /* PCでキー1〜5を押したときの相手 */
 
 function ent(id){ var L=all(); for(var i=0;i<L.length;i++) if(L[i].id===id) return L[i]; return null; }
@@ -869,6 +891,107 @@ function setC(ev,id,c){
     if(ch) ch.className='ch'+(c?' ch-'+c:'');
   }
   if(activeC!==null) draw();   /* 色で絞ってる最中は並びが変わるので描き直す */
+}
+
+/* ============ 重要＝日付の欄を赤くする ============
+   色は「このあと何をするか」で、青が緑に上書きされていく。重要は上書きされない別の軸。
+   同じ場所に置くとぶつかるので、場所ごと分ける。日付をタップで付け外し。 */
+function setIm(ev,id){
+  if(SELMODE) return;
+  if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return;
+  if(e.im) delete e.im; else e.im=1;
+  e.u=Date.now(); persist(); pushSoon(); colbar();
+  var row=document.querySelector('.row[data-id="'+id+'"]');
+  if(row){ var c=row.getElementsByClassName('c-date')[0];
+    if(c) c.className='c-date'+(e.im?' im':''); }
+  if(activeI) draw();
+}
+function selIm(v){
+  var ids=selIds(); if(!ids.length) return;
+  all().forEach(function(e){ if(ids.indexOf(e.id)>=0){ if(v) e.im=1; else delete e.im; e.u=Date.now(); } });
+  persist(); pushSoon(); colbar(); draw();
+}
+
+/* ============ 行動タグ（タグの上の段） ============
+   このブロックについて、このあと何をするか。複数出ることがある。
+   済んだものはタップして取り消し線にする。消さない。何をした話だったかが履歴として残る。
+   全部に取り消し線が付いたら、そのブロックの色を自動で緑にする（＝片付いた）。 */
+var ACT=['AI壁打ち','下書きを進める','調べる'];
+
+function actList(){                 /* 既定の3つ＋今まで使ったもの */
+  var s=ACT.slice();
+  all().forEach(function(e){ (e.at||[]).forEach(function(x){ if(s.indexOf(x)<0) s.push(x); }); });
+  return s;
+}
+function atDone(e){                 /* 行動タグが全部消し込まれたか */
+  var a=e.at||[]; if(!a.length) return false;
+  var x=e.ax||[];
+  return a.every(function(n){ return x.indexOf(n)>=0; });
+}
+function atRedraw(id){
+  var e=ent(id), row=document.querySelector('.row[data-id="'+id+'"]');
+  if(!e||!row) return;
+  var box=row.getElementsByClassName('atg')[0];
+  if(box) box.innerHTML=atHtml(e);
+  row.className='row'+(e.c?' k-'+e.c:'')+(row.classList.contains('open')?' open':'')
+    +(row.classList.contains('sel')?' sel':'');
+  var ch=row.getElementsByClassName('ch')[0];
+  if(ch) ch.className='ch'+(e.c?' ch-'+e.c:'');
+}
+/* 行動タグをタップ＝取り消し線を付ける／外す */
+function atTog(ev,id,n){
+  if(ev) ev.stopPropagation();
+  if(SELMODE) return;
+  var e=ent(id); if(!e) return;
+  var x=(e.ax||[]).slice(), i=x.indexOf(n);
+  if(i>=0) x.splice(i,1); else x.push(n);
+  e.ax=x;
+  if(atDone(e)) e.c='g';                       /* 全部済んだら自動で緑 */
+  else if(e.c==='g') e.c='b';                  /* 消し込みを戻したら青に戻す */
+  e.u=Date.now(); persist(); pushSoon(); colbar(); atRedraw(id);
+}
+function atOpen(ev,id){
+  ev.stopPropagation();
+  var cell=ev.currentTarget.parentNode.parentNode;   /* .atg の親＝.c-title */
+  var was=cell.classList.contains('pk');
+  palClose();
+  if(was) return;
+  cell.classList.add('pk');
+  var box=document.createElement('div');
+  box.className='pal apl';
+  box.innerHTML=actList().map(function(n){
+    return '<span class="sw" onclick="atAdd(event,\''+id+'\',\''+esc(n)+'\')">'+esc(n)+'</span>'; }).join('');
+  cell.appendChild(box);
+}
+function atAdd(ev,id,n){
+  if(ev) ev.stopPropagation();
+  var e=ent(id); if(!e) return;
+  var a=(e.at||[]).slice();
+  if(a.indexOf(n)>=0){ a.splice(a.indexOf(n),1);            /* もう付いてたら外す */
+    var x=(e.ax||[]).filter(function(y){ return y!==n; }); e.ax=x; }
+  else a.push(n);
+  e.at=a;
+  if(a.length&&!e.c) e.c='b';                  /* やることが付いた＝これから何かする */
+  if(atDone(e)) e.c='g';
+  e.u=Date.now(); persist(); pushSoon(); colbar(); palClose(); atRedraw(id);
+}
+function atHtml(e){
+  var a=e.at||[], x=e.ax||[];
+  return a.map(function(n){
+    return '<span class="'+(x.indexOf(n)>=0?'dn':'')+'" onclick="atTog(event,\''+e.id+'\',\''+esc(n)+'\')">'
+      +esc(n)+'</span>'; }).join('')
+    +'<span class="ad" onclick="atOpen(event,\''+e.id+'\')">＋やること</span>';
+}
+function selAct(n){
+  var ids=selIds(); if(!ids.length) return;
+  all().forEach(function(e){
+    if(ids.indexOf(e.id)<0) return;
+    var a=(e.at||[]).slice();
+    if(a.indexOf(n)<0) a.push(n);
+    e.at=a; if(!e.c) e.c='b'; e.u=Date.now();
+  });
+  persist(); pushSoon(); colbar(); draw();
 }
 
 /* ============ 星＝重要度（1〜5） ============
@@ -1064,8 +1187,10 @@ function splitSel(){
   var src=e.raw||e.org||''; if(!src){ st('原文が無い'); return; }
   ask(PSPLIT,src,'分割中…',function(acc,t0){
     var got=parse(acc,src);
-    if(got.length<2){ st('分けられる境目が無かった'); endAsk(); return; }
-    got.forEach(function(g){ g.d=e.d; g.c=e.c||''; g.u=Date.now(); g.tm=tmOf(e); });
+    if(got.length<2){ st('1つのままで返ってきた。もう一回押してみて'); endAsk(); return; }
+    got.forEach(function(g){ g.d=e.d; g.c=e.c||''; g.u=Date.now(); g.tm=tmOf(e);
+      if(e.im) g.im=1;
+      if((e.at||[]).length){ g.at=e.at.slice(); g.ax=(e.ax||[]).slice(); } });
     trashIds([e.id]);
     for(var i=got.length-1;i>=0;i--) MEM.unshift(got[i]);
     sortMem(); SEL={}; persist(); pushSoon();
@@ -1095,6 +1220,13 @@ function joinSel(){
     var tg=[]; L.forEach(function(e){ (e.tag||[]).forEach(function(x){ if(tg.indexOf(x)<0) tg.push(x); }); });
     (n.tag||[]).forEach(function(x){ if(tg.indexOf(x)<0) tg.push(x); });
     n.tag=fixTags(tg);
+    if(L.some(function(e){ return e.im; })) n.im=1;          /* 1つでも重要なら重要のまま */
+    var at=[],ax=[];                                        /* 行動タグは落とさずに全部持っていく */
+    L.forEach(function(e){
+      (e.at||[]).forEach(function(x){ if(at.indexOf(x)<0) at.push(x); });
+      (e.ax||[]).forEach(function(x){ if(ax.indexOf(x)<0) ax.push(x); });
+    });
+    if(at.length){ n.at=at; n.ax=ax.filter(function(x){ return at.indexOf(x)>=0; }); }
     trashIds(ids);
     MEM.unshift(n); sortMem(); SEL={}; persist(); pushSoon();
     draw(); tags(); colbar(); trCnt(); selCnt(); endAsk();
@@ -1287,10 +1419,11 @@ function draw(){
   var L=all();
   L=L.filter(function(e){ return TRASH ? !!e.z : !e.z; });   /* z=1 はゴミ箱の中 */
   /* 絞り込みが効いてる最中は区切り線を出さない。範囲の意味が壊れるから */
-  var seps=(active===null&&activeC===null&&activeS===null)?L.filter(isSep):[];
+  var seps=(active===null&&activeC===null&&activeS===null&&!activeI)?L.filter(isSep):[];
   L=L.filter(function(e){ return !isSep(e); });
   var list=active?L.filter(function(e){return (e.tag||[]).indexOf(active)>=0;}):L;
   if(activeC!==null) list=list.filter(function(e){ return (e.c||'')===activeC; });
+  if(activeI) list=list.filter(function(e){ return !!e.im; });
   if(activeS!==null) list=list.filter(function(e){ var s=e.s||0;
     return activeS===0 ? s===0 : s>=activeS; });
   list=list.slice().reverse();   /* 古い順にして、いちばん下を最新にする */
@@ -1307,10 +1440,13 @@ function draw(){
     var stx='<span class="stx">'+[1,2,3,4,5].map(function(k){
       return '<i class="'+(k<=sv?'f':'')+'" onclick="setS(event,\''+e.id+'\','+k+')">★</i>'; }).join('')+'</span>';
     return '<div class="row'+(c?' k-'+c:'')+(sl?' sel':'')+'" data-id="'+e.id+'" onclick="rowTap(event,\''+e.id+'\',this)">'
-      +'<div class="c-date">'+esc(DM[e.id]||e.d)+'<span class="tmx">'+esc(tmOf(e))+'</span>'+stx
+      +'<div class="c-date'+(e.im?' im':'')+'">'
+        +'<span class="dtx" onclick="setIm(event,\''+e.id+'\')">'+esc(DM[e.id]||e.d)+'</span>'
+        +'<span class="tmx">'+esc(tmOf(e))+'</span>'+stx
         +(e.n?'<span class="nox" onclick="cpNum(event,'+e.n+')">#'+e.n+'</span>':'')+'</div>'
       +'<div class="c-title">'+ck+B('t')
         +'<span class="ch'+(c?' ch-'+c:'')+'" onclick="palOpen(event,\''+e.id+'\')"></span>'+esc(e.t)
+        +'<div class="atg">'+atHtml(e)+'</div>'
         +'<div class="tags">'+tg+B('g')+'</div></div>'
       +'<div class="c-org">'+B('org')+md(e.org)+'</div>'
       +'<div class="c-raw">'+B('raw')+md(e.raw)+'</div></div>';
@@ -1328,25 +1464,31 @@ function pick(x,b){ active=x; draw(); toBottom();
 
 /* 色で絞る */
 function colbar(){
-  var L=all(), n={};
-  L.forEach(function(e){ if(isSep(e)) return; var k=e.c||''; n[k]=(n[k]||0)+1; });
-  var h='<button class="'+(activeC===null?'on':'')+'" onclick="pickC(null,this)">全部</button>';
+  var L=all(), n={}, im=0;
+  L.forEach(function(e){ if(isSep(e)) return; var k=e.c||''; n[k]=(n[k]||0)+1; if(e.im) im++; });
+  var h='<button class="'+(activeC===null&&!activeI?'on':'')+'" onclick="pickC(null,this)">全部</button>';
   h+=COL.map(function(c){
-    return '<button class="'+(activeC===c.k?'on':'')+'" onclick="pickC(\''+c.k+'\',this)">'
+    return '<button class="'+(!activeI&&activeC===c.k?'on':'')+'" onclick="pickC(\''+c.k+'\',this)">'
       +c.n+' '+(n[c.k]||0)+'</button>'; }).join('');
+  h+='<button class="'+(activeI?'on':'')+'" onclick="pickI(this)">重要 '+im+'</button>';
   document.getElementById('colbar').innerHTML=h;
   starbar();   /* 星の帯も一緒に更新する。呼ぶ場所を増やさないため */
 }
-function pickC(k,b){ activeC=k; draw(); toBottom();
+function colOn(b){
   var bs=document.getElementById('colbar').getElementsByTagName('button');
-  for(var i=0;i<bs.length;i++) bs[i].className=''; b.className='on'; }
+  for(var i=0;i<bs.length;i++) bs[i].className=''; b.className='on';
+}
+function pickC(k,b){ activeC=k; activeI=false; draw(); toBottom(); colOn(b); }
+function pickI(b){ activeI=!activeI; activeC=null; draw(); toBottom();
+  if(activeI) colOn(b); else colbar(); }
 
 /* PCのおまけ：最後に触った行に 1〜5 で色を付ける */
 document.addEventListener('keydown',function(ev){
   if(!LASTID) return;
   var t=ev.target, tn=t&&t.tagName;
   if(tn==='TEXTAREA'||tn==='INPUT') return;
-  var i='12345'.indexOf(ev.key);
+  if(ev.key==='5'){ ev.preventDefault(); setIm(null,LASTID); return; }   /* 5＝重要の付け外し */
+  var i='1234'.indexOf(ev.key);
   if(i<0) return;
   ev.preventDefault(); setC(null,LASTID,COL[i].k);
 });
@@ -1548,13 +1690,23 @@ function scrubTags(){
   if(n){ pushSoon(); st('壊れたタグを'+n+'件なおした'); }
 }
 
+/* v35で色の意味を分けた。赤＝読み返したい だったものは「重要」に引っ越す（日付の欄の赤）。
+   ブロックの色は「このあと何をするか」だけにする。付け直しは要らない。1回走れば済む。 */
+function mvRed(){
+  var n=0;
+  MEM.forEach(function(e){
+    if(e.c==='r'){ e.im=1; e.c=''; e.u=Date.now(); n++; }
+  });
+  if(n){ pushSoon(); st('赤の'+n+'件を「重要」に移した'); }
+}
+
 idbOpen().then(function(){ return idbGet('entries'); }).then(function(v){
   if(v&&v.length){ MEM=v; }
   else{ try{ MEM=JSON.parse(LS(KEY.e)||'[]'); }catch(e){ MEM=[]; } }   /* 前のlocalStorageから引っ越し */
   return idbGet('del');
 }).then(function(d){
   DEL=d||[];
-  scrubTags();
+  scrubTags(); mvRed();
   persist(); tags(); colbar(); trCnt(); draw(); toBottom();
   if(ghOn()) sync(true); else syst('GitHub未設定（この端末にだけ保存中）');
 });
